@@ -1,0 +1,33 @@
+# Local secrets and environment files; keep safe examples tracked.
+# 忽略本地密钥和环境文件；保留安全的配置示例。
+.env
+.env.*
+!.env.example
+
+# Python dependencies and generated files.
+# Python 依赖和生成文件。
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Frontend dependencies and build output.
+# 前端依赖和构建输出。
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local scratch files, logs, and editor metadata.
+# 本地临时文件、日志和编辑器元数据。
+work/
+*.log
+.DS_Store
+.idea/
+.vscode/
