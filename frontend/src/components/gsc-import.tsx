@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { PageMetricsTable } from "@/components/page-metrics-table";
+import { GscScopeInput } from "@/components/gsc-scope-input";
+import { ReportScopeSummary } from "@/components/report-scope-summary";
 import { formatPeriod } from "@/lib/history-api";
+import { type ScopeDeclaration } from "@/lib/report-scope";
 import {
   applyGscFile,
   previewGscFile,
@@ -21,6 +24,8 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export function GscImport() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [scope, setScope] = useState<ScopeDeclaration>({ property_id: null, search_type: null, filters: null });
+  const [previewScope, setPreviewScope] = useState<ScopeDeclaration | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [stage, setStage] = useState<"idle" | "previewing" | "applying">("idle");
@@ -40,6 +45,7 @@ export function GscImport() {
     const nextFile = event.target.files?.[0] ?? null;
     setFile(nextFile);
     setPreview(null);
+    setPreviewScope(null);
     setResult(null);
     setConfirmed(false);
     setStage("idle");
@@ -53,6 +59,22 @@ export function GscImport() {
   }
 
   /**
+   * Invalidate confirmation on every scope edit, including while an earlier preview is pending.
+   * 每次范围编辑都使确认失效，包括此前预览请求仍在等待时。
+   */
+  function updateScope(nextScope: ScopeDeclaration) {
+    controller.current?.abort();
+    requestVersion.current += 1;
+    setScope(nextScope);
+    setPreview(null);
+    setPreviewScope(null);
+    setResult(null);
+    setConfirmed(false);
+    setStage("idle");
+    setError(null);
+  }
+
+  /**
    * Preview the retained File without writing records and guard against selection races.
    * 预览保留的 File 而不写入记录，并防止文件选择变化造成请求竞争。
    */
@@ -63,13 +85,18 @@ export function GscImport() {
     controller.current = active;
     const version = ++requestVersion.current;
     setPreview(null);
+    setPreviewScope(null);
     setResult(null);
     setConfirmed(false);
     setError(null);
     setStage("previewing");
+    const submittedScope = structuredClone(scope);
     try {
-      const response = await previewGscFile(file, active.signal);
-      if (version === requestVersion.current) setPreview(response);
+      const response = await previewGscFile(file, submittedScope, active.signal);
+      if (version === requestVersion.current) {
+        setPreview(response);
+        setPreviewScope(submittedScope);
+      }
     } catch (error) {
       if (version === requestVersion.current) setError(requestErrorMessage(error));
     } finally {
@@ -82,14 +109,14 @@ export function GscImport() {
    * 仅在明确确认后持久化，重新提交产生当前预览的同一个 File。
    */
   async function importFile() {
-    if (!file || !preview?.can_apply || !confirmed || stage !== "idle" || result) return;
+    if (!file || !preview?.can_apply || !previewScope || !confirmed || stage !== "idle" || result) return;
     const active = new AbortController();
     controller.current = active;
     const version = ++requestVersion.current;
     setError(null);
     setStage("applying");
     try {
-      const response = await applyGscFile(file, preview.preview_hash, active.signal);
+      const response = await applyGscFile(file, preview.preview_hash, previewScope, active.signal);
       if (version === requestVersion.current) {
         setResult(response);
         setConfirmed(false);
@@ -118,6 +145,7 @@ export function GscImport() {
         <label className="field-label" htmlFor="gsc-file">GSC Pages export / GSC 网页导出文件</label>
         <input id="gsc-file" type="file" accept=".csv,.xlsx" onChange={selectFile} disabled={stage === "applying"} />
         {file && <p className="selected-file">Selected / 已选择：{file.name}</p>}
+        <GscScopeInput scope={scope} onChange={updateScope} disabled={stage === "applying"} />
         <button type="button" onClick={uploadPreview} disabled={!fileIsSupported || stage !== "idle"}>
           {stage === "previewing" ? "Validating… / 校验中……" : "Upload / Preview · 上传 / 预览"}
         </button>
@@ -139,6 +167,10 @@ export function GscImport() {
             <div><dt>Invalid rows / 无效行</dt><dd>{preview.invalid_rows}</dd></div>
             <div><dt>Duplicate rows / 重复行</dt><dd>{preview.duplicate_rows}</dd></div>
           </dl>
+
+          <h3>Report scope and observed coverage / 报告范围与已观察覆盖</h3>
+          <ReportScopeSummary scope={preview.report_scope} coverage={preview} showEvidence />
+          <p>Known endpoints alone do not establish complete coverage. Unknown scope may be imported, but it cannot prove that reports are scope-compatible. 仅有已知起止日期不能证明完整覆盖。未知范围可以导入，但无法证明报告范围兼容。</p>
 
           <h3>Detected column mapping / 已识别的列映射</h3>
           <dl className="mapping-list">
@@ -178,11 +210,11 @@ export function GscImport() {
           ) : (
             <div className="confirmation">
               <h3>3. Confirm import / 确认导入</h3>
-              <p>New URLs create records; existing URLs update only supplied GSC metrics. 新 URL 创建记录；现有 URL 仅更新所提供的 GSC 指标。</p>
+              <p>Within the recorded site namespace, new URLs create records; matched URLs update only supplied GSC metrics. 在已记录站点命名空间内，新 URL 创建记录；匹配 URL 仅更新所提供的 GSC 指标。</p>
               <p>Blank metrics stay NULL for new pages and preserve existing values for matched URLs. 空白指标在新页面中保持 NULL，在匹配到的现有 URL 中保留原值。</p>
               <label className="checkbox-label">
                 <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={stage !== "idle" || result !== null} />
-                <span>I confirm this is the latest 28-day Pages report and want to import the previewed file. 我确认这是最近 28 天的网页报告，并希望导入当前预览的文件。</span>
+                <span>I confirm this is the latest 28-day Pages report and want to import the previewed file with the scope shown above. 我确认这是最近 28 天的网页报告，并希望使用上方显示的范围导入当前预览文件。</span>
               </label>
               <button type="button" onClick={importFile} disabled={!confirmed || stage !== "idle" || result !== null}>
                 {stage === "applying" ? "Importing… / 导入中……" : "Import / 导入"}
@@ -195,7 +227,7 @@ export function GscImport() {
       {result && (
         <section className="card" role="status" aria-labelledby="result-heading">
           <h2 id="result-heading">{result.already_processed ? "Already processed / 已处理" : "Import complete / 导入完成"}</h2>
-          {result.already_processed && <p>This exact file was already imported. No new history, snapshots, or page changes were applied. 此文件此前已导入。本次未新增历史、快照或页面变更。</p>}
+          {result.already_processed && <p>This exact file was already imported under the same canonical scope. No new history, snapshots, page changes, or provenance updates were applied. 此文件此前已在相同规范范围下导入。本次未新增历史、快照、页面变更或来源更新。</p>}
           <dl className="summary-grid">
             <div><dt>Created / 新建</dt><dd>{result.created_count}</dd></div>
             <div><dt>Updated / 更新</dt><dd>{result.updated_count}</dd></div>

@@ -13,7 +13,22 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_session
 from app.main import create_app
-from app.models import ImportRun, PagePerformanceSnapshot, SEOOpportunity, WebsitePage
+from app.models import (
+    ImportRun,
+    PageMetricProvenance,
+    PagePerformanceSnapshot,
+    SEOOpportunity,
+    Site,
+    WebsitePage,
+)
+from app.normalization.report_scope import canonical_scope_key
+
+KNOWN_SCOPE = {
+    "property_id": "sc-domain:example.com",
+    "search_type": "web",
+    "filters": [],
+    "filters_complete": True,
+}
 
 
 @pytest.fixture
@@ -66,6 +81,11 @@ def seed_history(engine, definitions):
                 total_rows=1,
                 created_count=1,
                 status="completed",
+                report_scope=fields.get("report_scope", KNOWN_SCOPE),
+                scope_fingerprint=canonical_scope_key(fields.get("report_scope", KNOWN_SCOPE)),
+                coverage_status=fields.get("coverage_status", "complete" if start else "unknown"),
+                observed_date_count=fields.get("observed_date_count", 28 if start else None),
+                dates_consecutive=fields.get("dates_consecutive", True if start else None),
             )
             session.add(run)
             session.flush()
@@ -290,9 +310,16 @@ def database_state(engine):
     with engine.connect() as connection:
         return {
             model.__tablename__: connection.execute(
-                select(model.__table__).order_by(model.__table__.c.id)
+                select(model.__table__).order_by(*model.__table__.primary_key.columns)
             ).all()
-            for model in (WebsitePage, ImportRun, PagePerformanceSnapshot, SEOOpportunity)
+            for model in (
+                Site,
+                WebsitePage,
+                ImportRun,
+                PagePerformanceSnapshot,
+                PageMetricProvenance,
+                SEOOpportunity,
+            )
         }
 
 
@@ -363,3 +390,78 @@ def test_performance_reuses_one_history_query_and_one_comparison(
     assert response.status_code == 200
     assert comparisons == 1
     assert len(statements) == 3
+
+
+def test_legacy_page_comparison_exposes_unknown_scope_and_coverage(quality_client, gsc_engine):
+    unknown = {
+        "report_scope": None,
+        "coverage_status": "unknown",
+        "observed_date_count": None,
+        "dates_consecutive": None,
+    }
+    page_id, _, snapshots = seed_history(gsc_engine, [unknown, unknown])
+    payload = quality_client.get(f"/api/v1/pages/{page_id}/performance").json()
+    comparison = payload["comparison"]
+    assert comparison["scope_compatibility"] == "unknown"
+    assert comparison["previous_report_scope"]["property_id"] is None
+    assert comparison["current_report_scope"]["status"] == "unknown"
+    assert comparison["previous_coverage_status"] == "unknown"
+    assert comparison["current_observed_date_count"] is None
+    assert payload["quality"]["readiness"] == "limited"
+    assert payload["quality"]["readiness_reasons"] == [
+        "unknown_report_scope",
+        "unknown_date_coverage",
+    ]
+    assert payload["quality"]["selected_snapshot_ids"] == [str(item) for item in snapshots]
+
+
+@pytest.mark.parametrize(
+    "conflicting_scope",
+    [
+        KNOWN_SCOPE | {"property_id": "sc-domain:other.example"},
+        KNOWN_SCOPE | {"search_type": "image"},
+        KNOWN_SCOPE
+        | {"filters": [{"dimension": "device", "operator": "equals", "value": "mobile"}]},
+        KNOWN_SCOPE | {"filters": [{"dimension": "country", "operator": "equals", "value": "USA"}]},
+    ],
+)
+def test_page_scope_conflicts_are_not_selected(quality_client, gsc_engine, conflicting_scope):
+    page_id, _, _ = seed_history(gsc_engine, [{}, {"report_scope": conflicting_scope}])
+    payload = quality_client.get(f"/api/v1/pages/{page_id}/performance").json()
+    assert payload["comparison"] is None
+    assert payload["quality"]["readiness"] == "insufficient"
+    assert payload["quality"]["selected_snapshot_ids"] == []
+    assert quality_codes(payload["quality"])["incompatible_report_scope"]["evidence"]
+
+
+def test_sparse_selected_coverage_is_not_ready_despite_28_day_endpoints(quality_client, gsc_engine):
+    page_id, _, _ = seed_history(
+        gsc_engine,
+        [{}, {"coverage_status": "partial", "observed_date_count": 3, "dates_consecutive": False}],
+    )
+    payload = quality_client.get(f"/api/v1/pages/{page_id}/performance").json()
+    assert payload["comparison"]["scope_compatibility"] == "compatible"
+    assert payload["comparison"]["current_coverage_status"] == "partial"
+    assert payload["comparison"]["current_observed_date_count"] == 3
+    assert payload["quality"]["readiness"] == "limited"
+    assert payload["quality"]["readiness_reasons"] == ["incomplete_date_coverage"]
+
+
+def test_incompatible_revision_keeps_previous_matching_revision_visible(quality_client, gsc_engine):
+    page_id, _, snapshots = seed_history(
+        gsc_engine,
+        [
+            {},
+            {},
+            {
+                "period_start": date(2026, 1, 29),
+                "report_scope": KNOWN_SCOPE | {"search_type": "image"},
+            },
+        ],
+    )
+    payload = quality_client.get(f"/api/v1/pages/{page_id}/performance").json()
+    assert payload["comparison"]["previous_snapshot_id"] == str(snapshots[0])
+    assert payload["comparison"]["current_snapshot_id"] == str(snapshots[1])
+    assert payload["quality"]["readiness"] == "ready"
+    assert "incompatible_report_scope" in quality_codes(payload["quality"])
+    assert payload["quality"]["counts"]["revision_periods"] == 0

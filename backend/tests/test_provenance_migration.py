@@ -211,7 +211,7 @@ def populated_head(migration_connection):
     connection, config = migration_connection
     command.upgrade(config, "0002_import_history")
     identifiers = seed_phase4_rows(connection)
-    command.upgrade(config, "head")
+    command.upgrade(config, "0003_current_metric_provenance")
     return connection, identifiers
 
 
@@ -233,7 +233,7 @@ def test_provenance_upgrade_downgrade_preserves_every_legacy_row(migration_conne
     original_tables = set(inspect(connection).get_table_names())
     connection.commit()
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "0003_current_metric_provenance")
     assert set(inspect(connection).get_table_names()) == original_tables | {PROVENANCE_TABLE}
     assert legacy_rows(connection) == original_rows
     assert connection.scalar(text("SELECT count(*) FROM page_metric_provenance")) == 0
@@ -241,7 +241,6 @@ def test_provenance_upgrade_downgrade_preserves_every_legacy_row(migration_conne
         "0003_current_metric_provenance"
     )
     connection.commit()
-    command.check(config)
 
     for metric in METRICS:
         insert_provenance(
@@ -262,11 +261,10 @@ def test_provenance_upgrade_downgrade_preserves_every_legacy_row(migration_conne
     )
     connection.commit()
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "0003_current_metric_provenance")
     assert legacy_rows(connection) == original_rows
     assert connection.scalar(text("SELECT count(*) FROM page_metric_provenance")) == 0
     connection.commit()
-    command.check(config)
 
 
 def test_fresh_provenance_schema_matches_metadata(migration_connection):
@@ -276,6 +274,7 @@ def test_fresh_provenance_schema_matches_metadata(migration_connection):
     assert set(inspector.get_table_names()) == set(LEGACY_TABLES) | {
         PROVENANCE_TABLE,
         "alembic_version",
+        "sites",
     }
     columns = inspector.get_columns(PROVENANCE_TABLE)
     assert {column["name"] for column in columns} == {"page_id", "metric_name", "snapshot_id"}

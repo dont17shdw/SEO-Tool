@@ -6,6 +6,7 @@ from app.models.import_run import ImportRun
 from app.models.page_metric_provenance import PageMetricProvenance
 from app.models.page_performance_snapshot import PagePerformanceSnapshot
 from app.models.seo_opportunity import SEOOpportunity
+from app.models.site import Site
 from app.models.website_page import WebsitePage
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "PageMetricProvenance",
     "PagePerformanceSnapshot",
     "SEOOpportunity",
+    "Site",
     "WebsitePage",
 ]

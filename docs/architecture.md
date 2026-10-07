@@ -2,32 +2,29 @@
 
 ## Scope / 范围
 
-Phases 1–4 established the runnable stack, manual Google Search Console (GSC) imports, historical snapshots, comparisons, and runtime data quality. Phase 5 records a current snapshot link for each supplied GSC metric in the existing import transaction and adds a separate read-only provenance view.
-第一至四阶段建立可运行技术栈、手动 Google Search Console（GSC）导入、历史快照、对比及运行时数据质量。第五阶段在已有导入事务中，为每个提供的 GSC 指标记录当前快照关联，并增加独立的只读来源视图。
+Phases 1–5 established the runnable stack, manual GSC Pages imports, historical snapshots, deterministic comparisons, runtime data quality, and per-field current provenance. Phase 6 adds explicit site/report-scope evidence and observed-date coverage, completing the planned data foundation without an SEO Opportunity Engine.
+第一至五阶段建立可运行技术栈、手动 GSC 网页导入、历史快照、确定性对比、运行时数据质量及逐字段当前来源。第六阶段增加明确站点与报告范围证据及已观察日期覆盖，完成计划中的数据基础，不包含 SEO 机会引擎。
 
-The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**. V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. The current flow is **SOURCE FILE → IMPORT → SNAPSHOT → CURRENT VALUE + PROVENANCE**, alongside **HISTORY → COMPARISON → DATA QUALITY / EVIDENCE READINESS**. Current-state provenance and historical comparison remain separate. SEO judgments, scoring, recommendations, AI reasoning, and execution remain unimplemented.
-长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**。V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。当前流程为 **SOURCE FILE → IMPORT → SNAPSHOT → CURRENT VALUE + PROVENANCE**，并列有 **HISTORY → COMPARISON → DATA QUALITY / EVIDENCE READINESS**。当前状态来源与历史对比保持独立。SEO 判断、评分、建议、AI 推理及执行仍未实现。
+The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**; V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. The implemented flow is **GSC SOURCE → IMPORT → REPORT SCOPE → SNAPSHOT → CURRENT PROVENANCE → COMPARISON → DATA QUALITY**. Current applied state remains distinct from historical comparison evidence.
+长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**；V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。已实现流程为 **GSC SOURCE → IMPORT → REPORT SCOPE → SNAPSHOT → CURRENT PROVENANCE → COMPARISON → DATA QUALITY**。当前应用状态与历史对比证据保持独立。
 
 ## Local runtime / 本地运行架构
 
 ```text
 Browser / 浏览器
   └── Next.js + React + TypeScript
-        ├── /                     Development and health page / 开发与健康检查页面
-        ├── /imports/gsc          File preview and confirmation / 文件预览与确认
-        ├── /imports/history      Successful import history / 成功导入历史
-        ├── /pages                Paginated page metrics / 分页页面指标
-        └── /pages/[id]           Current sources, history, quality / 当前来源、历史、质量
+        ├── /                     Development health page / 开发健康检查页
+        ├── /imports/gsc          Scope declaration, preview, apply / 范围声明、预览、应用
+        ├── /imports/history      Import scope and coverage / 导入范围与覆盖
+        ├── /pages                Paginated current page list / 分页当前页面列表
+        └── /pages/[id]           History, scope, quality, sources / 历史、范围、质量、来源
               └── FastAPI /api/v1
-                    ├── Health / 健康检查
-                    ├── GSC parsing and normalization / GSC 解析与标准化
                     └── SQLAlchemy → PostgreSQL
-
-Alembic → Explicit database migrations / 显式数据库迁移
+Alembic → Explicit migrations / 显式迁移
 ```
 
-The frontend and backend run as local processes; Docker Compose runs PostgreSQL only. The backend retains synchronous SQLAlchemy 2 sessions and psycopg 3. There is no task queue, server-side preview session, or permanent upload store.
-前端与后端以本地进程运行；Docker Compose 仅运行 PostgreSQL。后端沿用 SQLAlchemy 2 同步会话与 psycopg 3。当前没有任务队列、服务端预览会话或永久上传存储。
+Applications run as local processes; Docker Compose runs PostgreSQL only. The backend uses synchronous SQLAlchemy 2 sessions and psycopg 3. There is no task queue, server-side preview session, permanent upload store, production authentication, or account-management system.
+应用以本地进程运行；Docker Compose 仅运行 PostgreSQL。后端使用 SQLAlchemy 2 同步会话与 psycopg 3。没有任务队列、服务端预览会话、永久上传存储、生产身份认证或账户管理系统。
 
 ## Module boundaries / 模块边界
 
@@ -35,104 +32,86 @@ The frontend and backend run as local processes; Docker Compose runs PostgreSQL 
 backend/app/
   api/v1/                   HTTP requests and response schemas / HTTP 请求与响应结构
   config/                   Environment settings / 环境配置
-  db/                       SQLAlchemy sessions and base metadata / 会话与基础元数据
-  models/                   Persistent records / 持久化记录
-  imports/gsc/              GSC mapping, parsing, dates, persistence / GSC 映射、解析、日期、持久化
-  normalization/            Deterministic URL and metric validation / 确定性 URL 与指标校验
-  analysis/                 Comparison, quality, current provenance / 对比、质量、当前来源
-  scoring/                  Reserved calculations boundary / 预留评分计算边界
-  decision_engine/          Reserved prioritization boundary / 预留优先级边界
+  db/                       Sessions and base metadata / 会话与基础元数据
+  models/                   Sites, pages, history, current links / 站点、页面、历史、当前关联
+  imports/gsc/              Source parsing, metadata, persistence / 来源解析、元数据、持久化
+  normalization/            URL/metric/scope canonicalization / URL、指标、范围规范化
+  analysis/                 Scope compatibility, comparison, quality, provenance / 范围兼容、对比、质量、来源
+  scoring/                  Reserved calculation boundary / 预留计算边界
+  decision_engine/          Reserved decision boundary / 预留决策边界
   ai/                       Reserved semantic reasoning boundary / 预留语义推理边界
   execution/                Reserved future actions boundary / 预留未来行动边界
 backend/alembic/            Explicit schema migrations / 显式数据库结构迁移
-backend/tests/              Synthetic parser and database tests / 合成解析与数据库测试
-frontend/src/               Development routes and typed API client / 开发路由与带类型 API 客户端
-docs/                       Bilingual contracts and setup guidance / 双语契约与设置指南
+backend/tests/              Synthetic and PostgreSQL tests / 合成与 PostgreSQL 测试
+frontend/src/               Development routes and typed client / 开发路由与带类型客户端
+docs/                       Bilingual contracts and setup / 双语契约与设置
 ```
 
-- **Imports:** Source-specific mapping accepts English and Chinese GSC page headers. The standard-library CSV reader and lightweight `openpyxl` reader handle source formats. Worksheet selection checks page semantics and URL dimensions, rather than selecting any sheet with similar performance columns.
-  **导入：** 数据源映射支持英文及中文 GSC 网页列名。标准库 CSV 读取器及轻量的 `openpyxl` 读取器负责文件格式。工作表选择检查网页语义与 URL 维度，不根据相似的性能指标列随意选择工作表。
-- **Normalization:** Validate absolute HTTP(S) URLs and metric values, trim surrounding whitespace, and produce the existing model's four GSC fields. Missing metrics remain unknown; normalization does not infer SEO classifications or rewrite URLs.
-  **标准化：** 校验绝对 HTTP(S) URL 与指标值，去除前后空白，并生成现有模型的四个 GSC 字段。缺失指标保持未知；标准化不推导 SEO 分类，也不重写 URL。
-- **API:** Routes handle bounded multipart uploads, typed responses, explicit confirmation, and useful public errors. They delegate source processing and database persistence to the import modules.
-  **API：** 路由处理有大小限制的 multipart 上传、带类型响应、显式确认及易理解的公开错误。它们将数据源处理与数据库持久化委托给导入模块。
-- **Persistence:** One transaction upserts exact stored URLs, records the successful import, creates snapshots, and moves current provenance links for every supplied non-`NULL` metric. A blank input preserves both current value and link, while its new snapshot records `NULL`. Models define integrity without parsing files or making SEO judgments.
-  **持久化：** 一个事务按精确存储的 URL 新增或更新、记录成功导入、创建快照，并为每个提供的非 `NULL` 指标移动当前来源关联。空白输入同时保留当前值与关联，新快照则记录 `NULL`。模型负责完整性，不解析文件，也不进行 SEO 判断。
-- **Analysis:** `performance_comparison.py` selects compatible dated snapshots and calculates descriptive changes. `data_quality.py` consumes that output and existing history to explain evidence limitations. The quality module does not repeat comparison arithmetic, fill missing values, access the database, persist observations, or generate opportunities.
-  **分析：** `performance_comparison.py` 选择具有兼容日期的快照并计算描述性变化。`data_quality.py` 使用该输出及已有历史解释证据限制。质量模块不重复对比计算、不填补缺失值、不访问数据库、不持久化观察，也不生成机会。
-- **Current provenance:** `current_provenance.py` validates explicitly stored links against the same page's snapshot and current metric, then exposes known/unknown/unavailable statuses. Equality checks validate a recorded link; they never establish a missing link. Its observations are separate from comparison readiness.
-  **当前来源：** `current_provenance.py` 根据同一页面的快照及当前指标校验明确存储的关联，再展示已知、未知或不可用状态。相等性检查校验已记录关联；绝不建立缺失关联。其观察与对比就绪度分离。
-- **Future processing:** Scoring, decision-making, AI reasoning, and execution remain separate. Future AI provider details belong behind the AI boundary; recommendations must not cause external actions automatically.
-  **未来处理：** 评分、决策、AI 推理与执行保持独立。未来 AI 供应商细节属于 AI 边界内部；建议不得自动触发外部行动。
+- **Ingestion:** The existing standard-library CSV reader and lightweight `openpyxl` reader detect English/Chinese Pages semantics. Separate source-specific metadata parsing extracts only supported Filters facts and reliable daily dates. Unsupported or absent scope remains unknown; the parser never calls a GSC API or infers identity from page URLs or filenames.
+  **导入：** 现有标准库 CSV 读取器及轻量 `openpyxl` 读取器识别英文与中文网页语义。独立的数据源元数据解析仅提取受支持的筛选事实与可靠每日日期。不支持或缺失范围保持未知；解析器绝不调用 GSC API，也不从页面 URL 或文件名推导身份。
+- **Normalization:** Validate URLs/metrics as before; canonicalize supported property, search, and structured filter values deterministically. The canonical identity excludes date range and evidence origin. Preserve observed and declared evidence separately, rather than storing arbitrary filter prose as an identity.
+  **标准化：** 沿用 URL 与指标校验；确定性规范化受支持属性、搜索及结构化筛选值。规范身份排除日期范围与证据来源。分别保留观察及声明证据，不将任意筛选描述作为身份。
+- **Persistence:** Resolve a minimal property-bound Site and upsert pages within `(site_id, url)`. Unknown site ownership is a separate namespace and never automatically assigned. Site creation, page updates, completed run, snapshots, and supplied metric links share one transaction. Report-level scope/coverage belongs on `ImportRun`, not copied into every snapshot.
+  **持久化：** 解析最小属性绑定站点，在 `(site_id, url)` 内新增或更新页面。未知站点归属为独立命名空间，绝不自动分配。站点创建、页面更新、已完成导入、快照及已提供指标关联共用一个事务。报告级范围与覆盖存储在 `ImportRun`，不复制到每个快照。
+- **Analysis:** Scope compatibility returns `compatible`, `incompatible`, or `unknown` using explicit facts. Comparison excludes conflicting scope and reuses established date/duration arithmetic. Quality consumes that selected pair and full history; it does not repeat calculations, write judgments, or generate opportunities.
+  **分析：** 范围兼容性根据明确事实返回 `compatible`、`incompatible` 或 `unknown`。对比排除冲突范围，复用已有日期、时长与数值计算。质量使用该所选对及完整历史；不重复计算、不写入判断，也不生成机会。
+- **Current provenance:** Recorded page/metric/snapshot links retain Phase 5 meaning. A supplied same value or measured zero refreshes a link; blanks preserve value and link. An older period applied later can remain current. Scope neither rewrites provenance nor establishes missing legacy links.
+  **当前来源：** 已记录页面、指标与快照关联保留第五阶段含义。提供的相同值或测得零刷新关联；空白保留值与关联。后来应用的较早时间段仍可成为当前来源。范围不重写来源，也不建立缺失旧关联。
+- **Future processing:** Calculations remain deterministic. Scoring, decisions, model-independent semantic AI reasoning, and execution remain separate reserved modules. No implemented read view triggers external actions.
+  **未来处理：** 计算保持确定性。评分、决策、独立于模型的语义 AI 推理及执行仍为独立预留模块。已实现读取视图不触发外部行动。
 
-## Preview and confirmation / 预览与确认
+## Preview, evidence, and duplicate identity / 预览、证据与重复身份
 
-Preview parses and validates the upload without opening a database session or writing records. It reports source, worksheet, reporting endpoints/status, column mapping, row counts, errors, and normalized samples. Mapping, date extraction, and validation use deterministic code without AI.
-预览解析并校验上传文件，不打开数据库会话，也不写入记录。它报告数据源、工作表、报告起止日期与状态、列映射、行数、错误及标准化样本。映射、日期提取与校验使用确定性代码，不使用 AI。
+Preview parses the file and optional explicit declaration without a database session. It shows detected and declared scope, unresolved fields, canonical identity, period endpoints, distinct observed date count, consecutiveness, and coverage, alongside existing row mapping/validation. The retained file and declaration are resubmitted on Apply.
+预览解析文件及可选明确声明，不使用数据库会话。它在已有行映射与校验之外，显示识别及声明范围、未解决字段、规范身份、时间段起止值、不同已观察日期数量、连续性及覆盖。应用时重新提交保留的文件与声明。
 
-The browser retains the selected file. Confirmation submits that file again with `confirmed=true` and the returned `preview_hash`. The backend re-parses the entire upload and verifies its fingerprint before persistence; it does not trust client-provided normalized rows. Invalid rows or duplicate URLs block the entire import. No partial valid-row import is performed.
-浏览器保留选中的文件。确认时再次提交该文件，并附带 `confirmed=true` 与返回的 `preview_hash`。后端在持久化前重新解析整个上传内容并校验指纹，不信任客户端提供的标准化行。无效行或重复 URL 会阻止整个导入；不会仅导入其中的有效行。
+`file_hash` is the SHA-256 of raw bytes. `preview_hash` separately binds those bytes and the normalized declaration/evidence. Apply re-parses and verifies that binding before database writes; changing scope requires another preview. The successful-import unique key is `(source, source_type, file_hash, scope_fingerprint)`. Equal bytes and equal canonical scope return the original run with no page/history/provenance updates. Another explicit scope creates another run; evidence origin and dates do not change canonical scope identity. Hashes provide consistency and duplicate identity, not authentication.
+`file_hash` 是原始字节的 SHA-256。`preview_hash` 单独绑定这些字节及标准化声明与证据。应用在数据库写入前重新解析并验证该绑定；范围改变需要再次预览。成功导入唯一键为 `(source, source_type, file_hash, scope_fingerprint)`。相同字节与相同规范范围返回原导入，不更新页面、历史或来源。另一明确范围创建另一导入；证据来源与日期不改变规范范围身份。哈希提供一致性及重复身份，不提供身份认证。
 
-The hash binds confirmation to the previewed bytes and is also the unique identity of a successful `ImportRun`. Applying already-imported identical bytes returns the original import ID and skips every row without updating pages or creating history again. Different bytes are a new import even when the filename is unchanged. The fingerprint is not authentication, authorization, or a server-side preview session.
-哈希将确认绑定到已预览的字节，也是成功 `ImportRun` 的唯一标识。应用已导入的相同字节会返回原导入 ID 并跳过每行，不更新页面，也不再次创建历史。字节不同即为新导入，即使文件名不变。指纹不是身份认证、权限控制或服务端预览会话。
+Workbook metadata is not an exhaustive scope certificate. The previously inspected localized export provided Web search type and the past-28-days filter but no property or complete non-date filter ledger. Supported observed facts can be supplemented by explicit declarations, preserving their origins. Unsupported metadata cannot be promoted to proven scope. See [report-scope.md](report-scope.md) and [gsc-import.md](gsc-import.md).
+工作簿元数据不是穷尽范围证明。此前检查的本地化导出提供网络搜索类型及过去 28 天筛选，但没有属性或完整非日期筛选清单。受支持观察事实可通过明确声明补充，同时保留来源。不支持元数据不能提升为已证明范围。详见 [report-scope.md](report-scope.md) 与 [gsc-import.md](gsc-import.md)。
 
-See [gsc-import.md](gsc-import.md) for aliases, reporting-window checks, normalization, limits, request examples, and duplicate semantics.
-列名别名、报告窗口检查、标准化、限制、请求示例与重复数据语义详见 [gsc-import.md](gsc-import.md)。
-
-## Versioned API / 带版本的 API
+## Versioned API / 带版本 API
 
 | Endpoint / 接口 | Behavior / 行为 |
 | --- | --- |
-| `GET /api/v1/health` | Application liveness; no database access.<br>应用存活检查；不访问数据库。 |
-| `POST /api/v1/imports/gsc/pages/preview` | Validate a CSV/XLSX upload; no persistence.<br>校验 CSV/XLSX 上传；不持久化。 |
-| `POST /api/v1/imports/gsc/pages/apply` | Revalidate and atomically persist an explicitly confirmed file.<br>重新校验并原子持久化已显式确认的文件。 |
-| `GET /api/v1/pages` | Read-only page metrics with basic pagination.<br>提供基本分页的只读页面指标。 |
-| `GET /api/v1/imports` | Successful import history with pagination.<br>提供分页的成功导入历史。 |
-| `GET /api/v1/pages/{page_id}/performance` | Current page, snapshots, comparison, quality, and sibling current provenance.<br>当前页面、快照、对比、质量及并列的当前来源。 |
-| `GET /api/v1/pages/{page_id}/quality` | Page evidence readiness and factual observations.<br>页面证据就绪度及事实观察。 |
-| `GET /api/v1/imports/{import_run_id}/quality` | Factual import-period observations; no page readiness.<br>导入时间段事实观察；不包含页面就绪度。 |
-| `GET /api/v1/pages/{page_id}/provenance` | Four current-metric source entries and factual provenance observations.<br>四个当前指标来源条目及事实来源观察。 |
+| `GET /api/v1/health` | Process liveness without database access.<br>不访问数据库的进程存活检查。 |
+| `POST /api/v1/imports/gsc/pages/preview` | File and scope preview without writes.<br>不写入的文件与范围预览。 |
+| `POST /api/v1/imports/gsc/pages/apply` | Revalidate explicit confirmation and commit atomically.<br>重新校验明确确认，原子提交。 |
+| `GET /api/v1/pages` | Paginated current pages with nullable site IDs.<br>含可空站点 ID 的分页当前页面。 |
+| `GET /api/v1/imports` | Paginated successful runs with scope/coverage facts.<br>含范围与覆盖事实的分页成功导入。 |
+| `GET /api/v1/imports/{import_run_id}` | Read one run's metadata, scope, and coverage.<br>读取一个导入的元数据、范围及覆盖。 |
+| `GET /api/v1/pages/{page_id}/performance` | Current page, snapshots, selected comparison facts, quality, and provenance.<br>当前页面、快照、所选对比事实、质量及来源。 |
+| `GET /api/v1/pages/{page_id}/quality` | Runtime evidence readiness and observations.<br>运行时证据就绪度与观察。 |
+| `GET /api/v1/imports/{import_run_id}/quality` | Runtime import facts without page readiness.<br>不包含页面就绪度的运行时导入事实。 |
+| `GET /api/v1/pages/{page_id}/provenance` | Four current-metric source entries, unchanged semantics.<br>四个当前指标来源条目，语义不变。 |
 
-The health response remains `{"status":"ok","service":"seo-tool-api"}`. It confirms the API process can serve requests, not that PostgreSQL is ready. FastAPI's `/docs` describes the implemented request and response contracts. There are no page editing/deletion endpoints or opportunity APIs.
-健康检查响应仍为 `{"status":"ok","service":"seo-tool-api"}`。它确认 API 进程能处理请求，不能证明 PostgreSQL 已就绪。FastAPI 的 `/docs` 描述已实现的请求与响应契约。当前没有页面编辑、删除接口或机会 API。
+The browser calls `NEXT_PUBLIC_API_BASE_URL` directly, defaulting to `http://localhost:8000`; `CORS_ORIGINS` lists allowed browser origins. `/docs` describes typed contracts. There are no editing/deletion, opportunity, site-management, or account-management endpoints.
+浏览器直接调用 `NEXT_PUBLIC_API_BASE_URL`，默认 `http://localhost:8000`；`CORS_ORIGINS` 列出允许浏览器来源。`/docs` 描述带类型契约。没有编辑删除、机会、站点管理或账户管理接口。
 
-The browser calls the backend directly through `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`. `CORS_ORIGINS` is an explicit JSON list of frontend origins. CORS supports the separate local ports; it is not an access-control system.
-浏览器通过 `NEXT_PUBLIC_API_BASE_URL` 直接调用后端，默认值为 `http://localhost:8000`。`CORS_ORIGINS` 是明确的前端来源 JSON 列表。CORS 支持本地不同端口；它不是访问控制系统。
+## Comparison and evidence readiness / 对比与证据就绪度
 
-## Schema and reporting windows / 数据库结构与报告窗口
+Revisions are grouped by exact scope identity as well as page/source/window/dates before selecting their latest imported revision. Equal dates alone cannot replace another scope's evidence. Each canonical scope stream contributes its newest two distinct periods; explicit conflicts are excluded and an eligible pair in another stream can remain selected when a newer singleton has no partner. Partial/legacy unknown-scope pairs remain descriptive and explicitly labeled `unknown`; they never become proven compatible because URLs or metrics match. Conflict evidence uses bounded representative witnesses, without enumerating every historical pair.
+在选择最近导入修订之前，修订按准确范围身份及页面、来源、窗口与日期分组。仅有日期相同不能替换另一范围的证据。每个规范范围流提供最近两个不同时间段；明确冲突被排除，较新单条记录没有伙伴时，另一范围流中的合格对仍可被选中。部分或旧未知范围对仍为描述性结果，明确标为 `unknown`；不会因 URL 或指标匹配而成为已证明兼容。冲突证据使用有界代表记录，不枚举全部历史对。
 
-Revision `0002_import_history` added import history and snapshots. Phase 5 head `0003_current_metric_provenance` creates the empty `page_metric_provenance` table, keyed by `(page_id, metric_name)` with one snapshot reference. Its check constraint permits only the four current GSC metrics. Existing pages, runs, snapshots, and opportunities are preserved without backfill. Schema changes remain explicit Alembic migrations, never automatic application-startup changes.
-修订 `0002_import_history` 增加导入历史与快照。第五阶段最新修订 `0003_current_metric_provenance` 创建空 `page_metric_provenance` 表，以 `(page_id, metric_name)` 为键，并具有一个快照引用。其检查约束仅允许四个当前 GSC 指标。已有页面、导入、快照及机会保留，不回填。数据库结构变化仍由显式 Alembic 迁移管理，不能在应用启动时自动变更。
+Reliable date sets establish `complete` only for 28 distinct consecutive dates spanning exactly 28 calendar days. Other reliable sets are `partial`; unavailable, malformed, conflicting, and CSV evidence is `unknown`. Endpoints alone do not establish full coverage. Coverage describes observed daily dates, not the completeness of all page rows.
+可靠日期集合仅在 28 个不同连续日期恰好跨越 28 个日历天时建立 `complete`。其他可靠集合为 `partial`；不可用、损坏、冲突及 CSV 证据为 `unknown`。仅有起止日期不建立完整覆盖。覆盖描述已观察每日日期，不描述全部页面行的完整性。
 
-The supported import window remains latest 28 days. XLSX date worksheets can provide observed period endpoints; missing, malformed, or conflicting evidence produces `NULL` endpoints and `period_status="unknown"` while still allowing the page import. Dates are never inferred from filenames or import timestamps. Observed endpoints do not certify full 28-day coverage. See [performance-history.md](performance-history.md) for extraction, comparison selection, and missing-data semantics.
-支持的导入窗口仍为最近 28 天。XLSX 日期工作表可提供已观察的时间段起止日期；缺失、损坏或冲突的证据会产生 `NULL` 起止日期及 `period_status="unknown"`，仍允许导入页面。绝不从文件名或导入时间推导日期。已观察的起止日期不能证明完整的 28 天覆盖。提取、对比选择及缺失数据语义详见 [performance-history.md](performance-history.md)。
+No eligible pair means `insufficient`. A selected unknown-scope pair or either selected report's partial/unknown coverage means `limited`, alongside prior overlap, missing metrics, zero baselines, and relevant out-of-order checks. `ready` additionally requires proven compatible scope and complete observed coverage. Stable new observations are `unknown_report_scope`, `incompatible_report_scope`, `incomplete_date_coverage`, and `unknown_date_coverage`. Historical caveats outside the selected pair stay visible without automatically lowering readiness. Current-provenance observations remain separate. See [performance-history.md](performance-history.md) and [data-quality.md](data-quality.md).
+没有合格对时为 `insufficient`。所选未知范围对或任一所选报告的部分、未知覆盖表示 `limited`，并保留此前重叠、缺失指标、零基准与相关乱序检查。`ready` 另外要求已证明范围兼容与完整已观察覆盖。稳定新增观察为 `unknown_report_scope`、`incompatible_report_scope`、`incomplete_date_coverage` 及 `unknown_date_coverage`。所选对之外的历史限制保持可见，不自动降低就绪度。当前来源观察保持独立。详见 [performance-history.md](performance-history.md) 与 [data-quality.md](data-quality.md)。
 
-The four write targets commit atomically: current pages, completed run, snapshots, and provenance links. Failure in any target rolls back all of them. A non-`NULL` same-value observation still moves its link to the new snapshot even when the page counts as skipped; zero is supplied data. Blank input and identical-file retries preserve existing links. `WebsitePage` remains latest successfully applied nonblank state, including older reports applied later. Comparison uses compatible report dates and raw snapshot metrics independently of these links.
-四个写入目标原子提交：当前页面、已完成导入、快照及来源关联。任一目标失败均回滚全部写入。非 `NULL` 的相同值观察仍将关联移动到新快照，即使页面计为跳过；零是已提供数据。空白输入及相同文件重试保留已有关联。`WebsitePage` 仍为最近成功应用的非空白状态，包括后来应用的较早报告。对比独立于这些关联，使用兼容报告日期及原始快照指标。
+The shared page loader reads complete history once and computes comparison once for quality and provenance. Run-level scope and coverage are reused from the existing join; snapshot pagination cannot alter the selected comparison or evidence summaries. Full history remains in memory for development-scale data.
+共享页面读取流程仅读取一次完整历史，计算一次对比并复用于质量与来源。导入级范围与覆盖从已有连接复用；快照分页不能改变所选对比或证据摘要。完整历史仍在内存中处理，适用于开发规模数据。
 
-Quality and provenance summaries are runtime, read-only responses; their observations are not stored. The shared page loader loads history once and calculates the Phase 3 comparison once. Performance/provenance requests add one provenance query for three SELECTs total; the dedicated quality route retains its two-query path. Both quality and provenance summaries are independent of the displayed snapshot page.
-质量及来源摘要是运行时只读响应；其观察不存储。共享页面加载器仅加载一次历史并计算一次第三阶段对比。性能及来源请求增加一次来源查询，总计三个 SELECT；独立质量路由保留两次查询路径。质量与来源摘要均独立于显示的快照页。
+## Migration and limits / 迁移与限制
 
-## Evidence readiness / 证据就绪度
+Head revision `0004_report_scope` creates `sites`, adds nullable ownership and report evidence, and changes URL/duplicate-import uniqueness. All five legacy tables, every original value/timestamp, and current links are preserved. Unknown legacy site, scope, and coverage remain unknown. No production property or prior evidence is fabricated. Downgrade checks whether the old global constraints can be restored and refuses atomically if duplicate scoped URLs or file identities would violate them; it never deletes history or rewrites hashes. See [data-model.md](data-model.md).
+最新修订 `0004_report_scope` 创建 `sites`，增加可空归属及报告证据，并改变 URL 与重复导入唯一性。已有五个表、每个原始值与时间戳及当前关联均保留。未知旧站点、范围及覆盖保持未知。不编造生产属性或此前证据。降级检查能否恢复旧全局约束；如果按范围存储的重复 URL 或文件身份违反约束，则原子拒绝，绝不删除历史或重写哈希。详见 [data-model.md](data-model.md)。
 
-Observations have stable machine-readable codes, `info`/`warning`/`blocking` severity, page/import scope, bilingual messages, affected IDs, and structured evidence. Blocking describes missing comparison evidence and does not reject an otherwise valid import. Page readiness is `insufficient` when Phase 3 finds no compatible exact pair; `limited` when the selected pair has overlap, missing metrics, a known zero percentage baseline, or relevant out-of-order import evidence; otherwise `ready`.
-观察包含稳定的机器可读代码、`info`、`warning` 或 `blocking` 严重程度、页面或导入范围、双语消息、受影响 ID 及结构化证据。阻断表示对比证据不足，不拒绝其他条件有效的导入。第三阶段未找到兼容准确时间段对时，页面就绪度为 `insufficient`；所选对存在重叠、缺失指标、已知零百分比基准或相关乱序导入证据时为 `limited`；否则为 `ready`。
+Uploads retain existing 5 MiB/10,000-row limits, ephemeral processing, and synthetic tests. Site identifiers are explicit evidence, not authenticated property ownership. Unknown/unsupported source metadata, source accuracy, complete page exports, statistical significance, and unobserved changes cannot be certified. Real exports, credentials, and scratch data stay outside Git. The application still excludes SEO opportunities, scoring, recommendations, Decision Engine logic, AI calls, GSC/GA4 APIs, WordPress, outreach, scheduling, and execution.
+上传沿用 5 MiB 与 10,000 行限制、临时处理及合成测试。站点标识是明确证据，不是已认证属性归属。未知或不支持来源元数据、来源准确性、完整页面导出、统计显著性与未观察变化不能获证明。真实导出、凭据及临时数据保留在 Git 之外。应用仍不包含 SEO 机会、评分、建议、决策引擎逻辑、AI 调用、GSC/GA4 API、WordPress、外链联系、调度及执行。
 
-Historical caveats outside the selected pair remain observations without automatically lowering readiness; same-period revisions alone are informational. Phase 5 provenance separately reports `current_state_not_single_snapshot` only for multiple validated known source IDs, and `unknown_current_metric_provenance` for non-`NULL` values without a valid recorded source. Neither alters Phase 4 readiness. Full contracts and provenance limitations are in [data-quality.md](data-quality.md) and [current-provenance.md](current-provenance.md).
-所选对之外的历史限制保留为观察，不自动降低就绪度；仅有同时间段修订属于信息提示。第五阶段来源仅在多个已验证已知来源 ID 时单独报告 `current_state_not_single_snapshot`，并为没有有效已记录来源的非 `NULL` 值报告 `unknown_current_metric_provenance`。两者均不改变第四阶段就绪度。完整契约及来源限制详见 [data-quality.md](data-quality.md) 与 [current-provenance.md](current-provenance.md)。
+## Suggested Phase 7 / 建议的第七阶段
 
-## Configuration and limits / 配置与限制
-
-Keep real credentials and environment files outside Git. `DATABASE_URL` uses `postgresql+psycopg://`. Next.js includes `NEXT_PUBLIC_API_BASE_URL` in browser code at build time; changing it requires restarting development or rebuilding. Installation and local commands are in [README.md](../README.md).
-真实凭据与环境文件不得提交到 Git。`DATABASE_URL` 使用 `postgresql+psycopg://`。Next.js 在构建时将 `NEXT_PUBLIC_API_BASE_URL` 写入浏览器代码；修改后需要重启开发服务器或重新构建。安装与本地命令位于 [README.md](../README.md)。
-
-Uploads are bounded to 5 MiB and 10,000 data rows. Preview returns at most 100 validation errors and 10 normalized samples while retaining full row counts. Source uploads are processed ephemerally and must not be committed; automated tests generate synthetic files. This is a local development interface without authentication or a production deployment plan.
-上传限制为 5 MiB 与 10,000 个数据行。预览最多返回 100 个校验错误与 10 个标准化样本，同时保留完整行数统计。源上传文件仅作临时处理，不得提交；自动化测试生成合成文件。这是没有身份认证或生产部署方案的本地开发界面。
-
-Phase 5 does not include GSC/GA4 APIs, query-level imports, indexing reports, SEO judgments, scoring, opportunity generation, a Decision Engine, AI calls, content generation, WordPress, outreach, background jobs, or autonomous actions.
-第五阶段不包含 GSC/GA4 API、查询级导入、索引报告、SEO 判断、评分、机会生成、决策引擎、AI 调用、内容生成、WordPress、外链联系、后台任务或自主行动。
-
-## Suggested Phase 6 / 建议的第六阶段
-
-Define a small source-scope and reporting-coverage evidence contract for GSC imports: preserve only directly supplied property/filter metadata and observed date coverage, keep missing evidence unknown, and expose it read-only. Test matching and conflicting evidence before using it in descriptive comparisons. Avoid broader multi-site architecture, SEO scores, a Decision Engine, AI, or execution. Phase 6 has not started.
-为 GSC 导入定义小型来源范围与报告覆盖证据契约：仅保留直接提供的属性、筛选元数据及已观察日期覆盖，缺失证据保持未知，并以只读方式展示。在描述性对比使用前，测试匹配及冲突证据。避免更广泛的多站点架构、SEO 评分、决策引擎、AI 或执行。第六阶段尚未开始。
+The next bounded step is an evidence-first SEO Opportunity Engine: define a small deterministic opportunity taxonomy and explicit evidence requirements, generate reviewable page-level candidates only when scope/coverage/readiness supports the rule, and preserve source IDs and explanations. Keep insufficient evidence explicit. Defer opportunity scoring, prioritization, AI, recommendations that execute changes, and integrations until separately specified. Phase 7 has not started.
+下一项有界步骤为证据优先的 SEO 机会引擎：定义小型确定性机会分类及明确证据要求，仅在范围、覆盖与就绪度支持规则时，生成可审阅页面级候选，并保留来源 ID 与解释。明确保留证据不足。机会评分、优先级、AI、执行修改的建议及集成延后至分别定义范围。第七阶段尚未开始。

@@ -97,7 +97,7 @@ export function PageDataQuality({ quality }: { quality: DataQuality }) {
       <p>Readiness describes evidence for comparison. “Blocking” refers to unavailable comparison evidence and does not invalidate an import. 就绪程度描述用于对比的证据。“证据不足”指对比所需证据不可用，不表示导入无效。</p>
       <dl className="summary-grid">
         <div><dt>Data readiness / 数据就绪程度</dt><dd data-readiness={quality.readiness}>{READINESS_LABELS[quality.readiness]}</dd></div>
-        <div><dt>Compatible comparison / 兼容对比</dt><dd>{quality.comparison_exists ? "Available / 可用" : "Unavailable / 不可用"}</dd></div>
+        <div><dt>Descriptive comparison / 描述性对比</dt><dd>{quality.comparison_exists ? "Available / 可用" : "Unavailable / 不可用"}</dd></div>
         {Object.entries(QUALITY_COUNT_LABELS).map(([key, label]) => (
           <div key={key}><dt>{label}</dt><dd>{quality.counts[key as keyof typeof QUALITY_COUNT_LABELS]}</dd></div>
         ))}

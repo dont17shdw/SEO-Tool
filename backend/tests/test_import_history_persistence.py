@@ -79,7 +79,7 @@ def test_import_run_and_snapshots_preserve_unknown_periods_and_complete_counts(g
             "pages_performance",
             "latest_28_days",
         )
-        assert run.file_hash == parsed.preview.preview_hash
+        assert run.file_hash == parsed.preview.file_hash
         assert run.filename == "pages.csv"
         assert run.status == "completed"
         assert run.total_rows == run.created_count + run.updated_count + run.skipped_count == 2

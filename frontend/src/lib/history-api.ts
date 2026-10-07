@@ -1,6 +1,7 @@
 import { isCount, isPageMetrics, isRecord, isReportingPeriod, requestJson, type PageMetrics } from "@/lib/gsc-api";
 import { isDataQuality, type DataQuality } from "@/lib/data-quality";
 import { isCurrentProvenance, type CurrentProvenance } from "@/lib/current-provenance";
+import { isDateCoverage, isReportScope, type DateCoverage, type ReportScope } from "@/lib/report-scope";
 
 type ReportingPeriod = {
   reporting_window: "latest_28_days";
@@ -9,7 +10,7 @@ type ReportingPeriod = {
   period_status: "exact" | "unknown";
 };
 
-export type ImportRun = ReportingPeriod & {
+export type ImportRun = ReportingPeriod & DateCoverage & {
   id: string;
   source: "gsc";
   source_type: "pages_performance";
@@ -21,9 +22,11 @@ export type ImportRun = ReportingPeriod & {
   updated_count: number;
   skipped_count: number;
   status: "completed";
+  site_id: string | null;
+  report_scope: ReportScope;
 };
 
-export type PerformanceSnapshot = ReportingPeriod & {
+export type PerformanceSnapshot = ReportingPeriod & DateCoverage & {
   id: string;
   import_run_id: string;
   page_id: string;
@@ -36,6 +39,7 @@ export type PerformanceSnapshot = ReportingPeriod & {
   impressions: number | null;
   ctr: string | number | null;
   average_position: string | number | null;
+  report_scope: ReportScope;
 };
 
 type MetricChange = { absolute_change: number | null; percentage_change: string | number | null };
@@ -52,6 +56,15 @@ export type PerformanceComparison = {
   impressions: MetricChange;
   ctr_percentage_point_change: string | number | null;
   average_position_change: string | number | null;
+  scope_compatibility: "compatible" | "unknown";
+  previous_report_scope: ReportScope;
+  current_report_scope: ReportScope;
+  previous_coverage_status: DateCoverage["coverage_status"];
+  current_coverage_status: DateCoverage["coverage_status"];
+  previous_observed_date_count: number | null;
+  current_observed_date_count: number | null;
+  previous_dates_consecutive: boolean | null;
+  current_dates_consecutive: boolean | null;
 };
 
 export type PaginationMetadata = { page: number; page_size: number; total: number; total_pages: number };
@@ -80,6 +93,7 @@ function isSourcePeriod(value: Record<string, unknown>): boolean {
 
 function isImportRun(value: unknown): boolean {
   return isRecord(value) && isSourcePeriod(value) && typeof value.id === "string" &&
+    isDateCoverage(value) && isReportScope(value.report_scope) && (value.site_id === null || typeof value.site_id === "string") &&
     typeof value.file_hash === "string" && typeof value.filename === "string" &&
     isTimestamp(value.imported_at) && value.status === "completed" &&
     [value.total_rows, value.created_count, value.updated_count, value.skipped_count].every(isCount);
@@ -91,6 +105,7 @@ function isImportRun(value: unknown): boolean {
  */
 function isSnapshot(value: unknown): boolean {
   return isRecord(value) && isSourcePeriod(value) && typeof value.id === "string" &&
+    isDateCoverage(value) && isReportScope(value.report_scope) &&
     typeof value.import_run_id === "string" && typeof value.page_id === "string" &&
     isTimestamp(value.imported_at) && isTimestamp(value.created_at) &&
     isPageMetrics({ ...value, clicks_28d: value.clicks, impressions_28d: value.impressions });
@@ -115,7 +130,19 @@ function isComparison(value: unknown): boolean {
     [value.previous_snapshot_id, value.current_snapshot_id, value.previous_period_start,
       value.previous_period_end, value.current_period_start, value.current_period_end].every((item) => typeof item === "string") &&
     typeof value.periods_overlap === "boolean" && isMetricChange(value.clicks) && isMetricChange(value.impressions) &&
-    isNullableChange(value.ctr_percentage_point_change) && isNullableChange(value.average_position_change));
+    isNullableChange(value.ctr_percentage_point_change) && isNullableChange(value.average_position_change) &&
+    (value.scope_compatibility === "compatible" || value.scope_compatibility === "unknown") &&
+    isReportScope(value.previous_report_scope) && isReportScope(value.current_report_scope) &&
+    (value.scope_compatibility !== "compatible" ||
+      (value.previous_report_scope.status === "known" && value.current_report_scope.status === "known" &&
+        value.previous_report_scope.fingerprint === value.current_report_scope.fingerprint)) &&
+    ["previous", "current"].every((prefix) => isDateCoverage({
+      period_start: value[`${prefix}_period_start`],
+      period_end: value[`${prefix}_period_end`],
+      coverage_status: value[`${prefix}_coverage_status`],
+      observed_date_count: value[`${prefix}_observed_date_count`],
+      dates_consecutive: value[`${prefix}_dates_consecutive`],
+    })));
 }
 
 /**

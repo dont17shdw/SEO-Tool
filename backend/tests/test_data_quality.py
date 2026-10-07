@@ -18,6 +18,13 @@ from app.analysis.performance_comparison import (
     compare_performance,
 )
 
+KNOWN_SCOPE = {
+    "property_id": "sc-domain:example.com",
+    "search_type": "web",
+    "filters": [],
+    "filters_complete": True,
+}
+
 
 def snapshot(number: int, *, start: int | None = 0, days: int = 28, **fields):
     period_start = date(2026, 1, 1) + timedelta(days=start) if start is not None else None
@@ -34,6 +41,14 @@ def snapshot(number: int, *, start: int | None = 0, days: int = 28, **fields):
         "impressions": 100,
         "ctr": Decimal("0.100000"),
         "average_position": Decimal("5.0000"),
+        "report_scope": KNOWN_SCOPE,
+        "coverage_status": "complete"
+        if period_start and days == 28
+        else "partial"
+        if period_start
+        else "unknown",
+        "observed_date_count": days if period_start else None,
+        "dates_consecutive": True if period_start else None,
     }
     return PerformanceObservation(**(defaults | fields))
 
@@ -58,6 +73,10 @@ def import_evidence(number: int, *, start: int | None = 0, days: int = 28, **fie
         "period_end": item.period_end,
         "imported_at": item.imported_at,
         "file_hash": f"{number:064x}",
+        "report_scope": item.report_scope,
+        "coverage_status": item.coverage_status,
+        "observed_date_count": item.observed_date_count,
+        "dates_consecutive": item.dates_consecutive,
     }
     return ImportEvidence(**(defaults | fields))
 
@@ -273,7 +292,11 @@ def test_unknown_and_missing_history_outside_the_selected_pair_remain_visible_wi
     result = quality(unknown, first, second)
     assert result.readiness == "ready"
     assert result.selected_snapshot_ids == [first.id, second.id]
-    assert set(by_code(result)) == {"unknown_reporting_dates", "missing_metrics"}
+    assert set(by_code(result)) == {
+        "unknown_reporting_dates",
+        "unknown_date_coverage",
+        "missing_metrics",
+    }
 
 
 def test_historical_out_of_order_import_outside_selected_pair_does_not_lower_readiness():
@@ -436,3 +459,120 @@ def test_import_result_is_stable_deduplicates_context_ids_and_includes_the_targe
         for observation in result.observations:
             json.dumps(observation.evidence)
             assert " / " in observation.message
+
+
+def test_legacy_dates_and_metrics_remain_descriptive_but_not_fully_ready():
+    legacy = {
+        "report_scope": None,
+        "coverage_status": "unknown",
+        "observed_date_count": None,
+        "dates_consecutive": None,
+    }
+    previous, current = snapshot(1, **legacy), snapshot(2, start=28, **legacy)
+    result = quality(previous, current)
+    assert result.comparison_exists
+    assert result.selected_snapshot_ids == [previous.id, current.id]
+    assert result.readiness == "limited"
+    assert result.readiness_reasons == ["unknown_report_scope", "unknown_date_coverage"]
+    assert set(by_code(result)) == {"unknown_report_scope", "unknown_date_coverage"}
+    assert by_code(result)["unknown_report_scope"].evidence["selected_scope_compatibility"] == (
+        "unknown"
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "count", "consecutive", "code"),
+    [
+        ("partial", 3, False, "incomplete_date_coverage"),
+        ("partial", 27, True, "incomplete_date_coverage"),
+        ("unknown", None, None, "unknown_date_coverage"),
+    ],
+)
+@pytest.mark.parametrize("side", ["previous", "current"])
+def test_selected_coverage_caveat_limits_readiness_factually(
+    status, count, consecutive, code, side
+):
+    previous, current = snapshot(1), snapshot(2, start=28)
+    changes = {
+        "coverage_status": status,
+        "observed_date_count": count,
+        "dates_consecutive": consecutive,
+    }
+    if side == "previous":
+        previous = replace(previous, **changes)
+    else:
+        current = replace(current, **changes)
+    result = quality(previous, current)
+    assert result.readiness == "limited"
+    assert result.readiness_reasons == [code]
+    evidence = by_code(result)[code].evidence["snapshots"][0]
+    assert evidence["observed_date_count"] == count
+    assert evidence["dates_consecutive"] is consecutive
+
+
+def test_unknown_historical_scope_and_coverage_do_not_lower_a_proven_selected_pair():
+    historical = snapshot(
+        1,
+        report_scope=None,
+        coverage_status="unknown",
+        observed_date_count=None,
+        dates_consecutive=None,
+    )
+    previous, current = snapshot(2, start=28), snapshot(3, start=56)
+    result = quality(historical, previous, current)
+    assert result.readiness == "ready"
+    assert result.selected_snapshot_ids == [previous.id, current.id]
+    assert result.readiness_reasons == []
+    assert {"unknown_report_scope", "unknown_date_coverage"} <= by_code(result).keys()
+
+
+def test_only_explicitly_conflicting_scopes_are_insufficient_without_a_selected_pair():
+    previous = snapshot(1)
+    current = snapshot(2, start=28, report_scope=KNOWN_SCOPE | {"search_type": "image"})
+    result = quality(previous, current)
+    assert result.readiness == "insufficient"
+    assert not result.comparison_exists
+    assert result.selected_snapshot_ids == []
+    assert result.readiness_reasons == ["insufficient_history"]
+    assert by_code(result)["insufficient_history"].severity == "blocking"
+    assert by_code(result)["incompatible_report_scope"].severity == "warning"
+    assert result.counts["compatible_exact_periods"] == 1
+
+
+def test_unrelated_scope_revisions_and_chronology_do_not_lower_a_valid_selected_pair():
+    previous, current = snapshot(1), snapshot(2, start=28)
+    unrelated = snapshot(3, report_scope=KNOWN_SCOPE | {"search_type": "image"})
+    result = quality(previous, current, unrelated)
+    assert result.readiness == "ready"
+    assert result.selected_snapshot_ids == [previous.id, current.id]
+    assert result.counts["revision_periods"] == 0
+    assert "same_period_revisions" not in by_code(result)
+    assert "out_of_order_import" not in by_code(result)
+    assert "incompatible_report_scope" in by_code(result)
+
+
+def test_import_scope_conflicts_do_not_claim_revisions_overlap_or_chronology():
+    target = import_evidence(2)
+    unrelated = import_evidence(1, report_scope=KNOWN_SCOPE | {"search_type": "image"})
+    newer = import_evidence(3, start=14, report_scope=KNOWN_SCOPE | {"search_type": "image"})
+    result = analyse_import_quality(target, [unrelated, newer])
+    assert set(by_code(result)) == {"incompatible_report_scope"}
+    assert result.counts["same_period_revision_imports"] == 0
+    assert result.counts["overlapping_imports"] == 0
+    assert result.counts["earlier_imported_newer_periods"] == 0
+
+
+def test_unknown_import_scope_and_coverage_remain_explicit_with_known_date_bounds():
+    target = import_evidence(
+        1,
+        report_scope=None,
+        coverage_status="unknown",
+        observed_date_count=None,
+        dates_consecutive=None,
+    )
+    result = analyse_import_quality(target, [target])
+    assert set(by_code(result)) == {"unknown_report_scope", "unknown_date_coverage"}
+    assert (
+        by_code(result)["unknown_report_scope"].evidence["target"]["report_scope"]["property_id"]
+        is None
+    )

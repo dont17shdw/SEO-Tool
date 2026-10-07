@@ -11,11 +11,21 @@ from typing import Any, Literal
 from uuid import UUID
 
 from app.analysis.performance_comparison import ComparisonOutcome, PerformanceObservation
+from app.normalization.report_scope import (
+    ReportScope,
+    canonical_scope_key,
+    compare_report_scopes,
+    unknown_scope,
+)
 
 METRIC_FIELDS = ("clicks", "impressions", "ctr", "average_position")
 CODE_ORDER = (
     "insufficient_history",
+    "unknown_report_scope",
+    "incompatible_report_scope",
     "unknown_reporting_dates",
+    "incomplete_date_coverage",
+    "unknown_date_coverage",
     "overlapping_comparison_periods",
     "missing_metrics",
     "zero_percentage_baseline",
@@ -68,6 +78,10 @@ class ImportEvidence:
     period_end: date | None
     imported_at: datetime
     file_hash: str
+    report_scope: ReportScope | dict[str, Any] | None = None
+    coverage_status: Literal["unknown", "partial", "complete"] = "unknown"
+    observed_date_count: int | None = None
+    dates_consecutive: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +104,14 @@ def _period(item: PerformanceObservation | ImportEvidence) -> tuple[date, date] 
     return item.period_start, item.period_end
 
 
+def _report_scope(item: PerformanceObservation | ImportEvidence) -> ReportScope:
+    return (
+        ReportScope.model_validate(item.report_scope)
+        if item.report_scope is not None
+        else unknown_scope()
+    )
+
+
 def _source_evidence(item: PerformanceObservation | ImportEvidence) -> dict[str, Any]:
     return {
         "source": item.source,
@@ -98,6 +120,10 @@ def _source_evidence(item: PerformanceObservation | ImportEvidence) -> dict[str,
         "period_start": item.period_start.isoformat() if item.period_start else None,
         "period_end": item.period_end.isoformat() if item.period_end else None,
         "imported_at": item.imported_at.isoformat(),
+        "report_scope": _report_scope(item).model_dump(mode="json"),
+        "coverage_status": item.coverage_status,
+        "observed_date_count": item.observed_date_count,
+        "dates_consecutive": item.dates_consecutive,
     }
 
 
@@ -148,9 +174,11 @@ def _out_of_order_snapshots(
     Equal import timestamps provide no chronology, regardless of deterministic ID ordering.
     相同导入时间戳不提供时间先后证据，无论 ID 的确定性排序如何。
     """
-    groups: dict[tuple[UUID, str, str, str], list[PerformanceObservation]] = defaultdict(list)
+    groups: dict[tuple[UUID, str, str, str, str], list[PerformanceObservation]] = defaultdict(list)
     for item in exact:
-        groups[(item.page_id, *_source_key(item))].append(item)
+        groups[(item.page_id, *_source_key(item), canonical_scope_key(item.report_scope))].append(
+            item
+        )
     cases: list[tuple[PerformanceObservation, PerformanceObservation]] = []
     for key in sorted(groups):
         ordered = sorted(groups[key], key=lambda item: (item.imported_at, item.id.int))
@@ -188,16 +216,19 @@ def analyse_page_quality(
         for item in ordered
         if any(getattr(item, field) is None for field in METRIC_FIELDS)
     }
-    period_groups: dict[tuple[UUID, str, str, str, date, date], list[PerformanceObservation]] = (
-        defaultdict(list)
-    )
-    compatible_groups: dict[tuple[UUID, str, str, str, int], set[tuple[date, date]]] = defaultdict(
-        set
+    period_groups: dict[
+        tuple[UUID, str, str, str, str, date, date], list[PerformanceObservation]
+    ] = defaultdict(list)
+    compatible_groups: dict[tuple[UUID, str, str, str, str, int], set[tuple[date, date]]] = (
+        defaultdict(set)
     )
     for item in exact:
         start, end = _period(item)
-        period_groups[(item.page_id, *_source_key(item), start, end)].append(item)
-        compatible_groups[(item.page_id, *_source_key(item), (end - start).days)].add((start, end))
+        scope_key = canonical_scope_key(item.report_scope)
+        period_groups[(item.page_id, *_source_key(item), scope_key, start, end)].append(item)
+        compatible_groups[(item.page_id, *_source_key(item), scope_key, (end - start).days)].add(
+            (start, end)
+        )
     revisions = [
         items
         for _, items in sorted(period_groups.items())
@@ -234,6 +265,92 @@ def analyse_page_quality(
                 {"comparison_unavailable_reason": outcome.unavailable_reason, **counts},
             )
         )
+    unknown_scopes = [item for item in ordered if _report_scope(item).status == "unknown"]
+    if unknown_scopes:
+        quality.append(
+            _page_observation(
+                "unknown_report_scope",
+                "warning",
+                f"Report scope is not fully proven for {len(unknown_scopes)} snapshots. / "
+                f"{len(unknown_scopes)} 个快照的报告范围未得到完整证明。",
+                unknown_scopes,
+                snapshot_import_ids,
+                {
+                    "snapshot_count": len(unknown_scopes),
+                    "snapshots": [
+                        _snapshot_evidence(item, snapshot_import_ids) for item in unknown_scopes
+                    ],
+                    "selected_scope_compatibility": (
+                        comparison.scope_compatibility if comparison else None
+                    ),
+                },
+            )
+        )
+    if comparison is not None and comparison.scope_compatibility == "unknown":
+        reasons.append("unknown_report_scope")
+    if outcome.scope_conflicts:
+        affected = [
+            by_id[snapshot_id]
+            for conflict in outcome.scope_conflicts
+            for snapshot_id in (conflict.previous_snapshot_id, conflict.current_snapshot_id)
+        ]
+        quality.append(
+            _page_observation(
+                "incompatible_report_scope",
+                "warning",
+                "Explicitly conflicting report scopes were excluded from comparison selection. / "
+                "已明确冲突的报告范围被排除在对比选择之外。",
+                affected,
+                snapshot_import_ids,
+                {
+                    "conflicts": [
+                        {
+                            "previous_snapshot": _snapshot_evidence(
+                                by_id[conflict.previous_snapshot_id], snapshot_import_ids
+                            ),
+                            "current_snapshot": _snapshot_evidence(
+                                by_id[conflict.current_snapshot_id], snapshot_import_ids
+                            ),
+                            "dimensions": list(conflict.dimensions),
+                        }
+                        for conflict in outcome.scope_conflicts
+                    ]
+                },
+            )
+        )
+    for status, code, message in (
+        (
+            "partial",
+            "incomplete_date_coverage",
+            "Observed dates do not establish complete consecutive 28-day coverage. / "
+            "已观察日期未证明完整连续的 28 天覆盖。",
+        ),
+        (
+            "unknown",
+            "unknown_date_coverage",
+            "Reliable observed reporting-date coverage is unavailable. / "
+            "缺少可靠的已观察报告日期覆盖证据。",
+        ),
+    ):
+        affected = [item for item in ordered if item.coverage_status == status]
+        if affected:
+            quality.append(
+                _page_observation(
+                    code,
+                    "warning",
+                    message,
+                    affected,
+                    snapshot_import_ids,
+                    {
+                        "snapshot_count": len(affected),
+                        "snapshots": [
+                            _snapshot_evidence(item, snapshot_import_ids) for item in affected
+                        ],
+                    },
+                )
+            )
+        if any(item.coverage_status == status for item in selected):
+            reasons.append(code)
     if unknown:
         quality.append(
             _page_observation(
@@ -331,6 +448,9 @@ def analyse_page_quality(
                         {
                             **_source_evidence(items[0]),
                             "page_id": str(items[0].page_id),
+                            "scope_compatibility": compare_report_scopes(
+                                items[0].report_scope, items[-1].report_scope
+                            ).status,
                             "snapshot_ids": [str(item.id) for item in items],
                             "import_run_ids": sorted(
                                 {
@@ -364,6 +484,9 @@ def analyse_page_quality(
                             "earlier_imported_newer_period": _snapshot_evidence(
                                 witness, snapshot_import_ids
                             ),
+                            "scope_compatibility": compare_report_scopes(
+                                item.report_scope, witness.report_scope
+                            ).status,
                         }
                         for item, witness in chronology
                     ],
@@ -394,7 +517,13 @@ def analyse_import_quality(
     runs = sorted(by_id.values(), key=lambda item: (item.imported_at, item.id.int))
     exact = [item for item in runs if _period(item) is not None]
     target_period = _period(target)
-    other = [item for item in exact if item.id != target.id and item.file_hash != target.file_hash]
+    other = [
+        item
+        for item in exact
+        if item.id != target.id
+        and item.file_hash != target.file_hash
+        and canonical_scope_key(item.report_scope) == canonical_scope_key(target.report_scope)
+    ]
     revisions = [
         item for item in other if target_period is not None and _period(item) == target_period
     ]
@@ -441,6 +570,56 @@ def analyse_import_quality(
             )
         )
 
+    if _report_scope(target).status == "unknown":
+        add(
+            "unknown_report_scope",
+            "warning",
+            "This import's property, search type, or complete filter scope is unknown. / "
+            "此导入的属性、搜索类型或完整筛选范围未知。",
+            [target],
+            {"import_count": 1},
+        )
+    incompatible = [
+        (item, compare_report_scopes(target.report_scope, item.report_scope))
+        for item in runs
+        if item.id != target.id
+        and compare_report_scopes(target.report_scope, item.report_scope).status == "incompatible"
+    ]
+    if incompatible:
+        add(
+            "incompatible_report_scope",
+            "warning",
+            "Other stored reports have explicitly conflicting scope dimensions. / "
+            "其他已存储报告具有明确冲突的范围维度。",
+            [target, *(item for item, _ in incompatible)],
+            {
+                "conflicts": [
+                    {
+                        "import": _import_evidence(item),
+                        "dimensions": list(compatibility.conflicts),
+                    }
+                    for item, compatibility in incompatible
+                ]
+            },
+        )
+    if target.coverage_status != "complete":
+        add(
+            (
+                "incomplete_date_coverage"
+                if target.coverage_status == "partial"
+                else "unknown_date_coverage"
+            ),
+            "warning",
+            (
+                "Observed dates do not establish complete consecutive 28-day coverage. / "
+                "已观察日期未证明完整连续的 28 天覆盖。"
+                if target.coverage_status == "partial"
+                else "Reliable observed reporting-date coverage is unavailable. / "
+                "缺少可靠的已观察报告日期覆盖证据。"
+            ),
+            [target],
+            {"import_count": 1},
+        )
     if target_period is None:
         add(
             "unknown_reporting_dates",

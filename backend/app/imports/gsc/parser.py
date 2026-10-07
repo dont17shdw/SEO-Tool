@@ -5,10 +5,10 @@
 import csv
 import hashlib
 import io
+import json
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from datetime import date
 from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile, ZipFile
@@ -23,8 +23,13 @@ from app.imports.gsc.mapping import (
     map_columns,
     normalize_label,
 )
-from app.imports.gsc.period import PeriodWorksheetTooLarge, extract_reporting_period
+from app.imports.gsc.period import (
+    PeriodWorksheetTooLarge,
+    ReportingEvidence,
+    extract_reporting_evidence,
+)
 from app.imports.gsc.schemas import ImportPreview, NormalizedGSCRow, ParsedImport, RowError
+from app.imports.gsc.scope import ScopeEvidenceError, extract_workbook_scope, resolve_scope
 from app.normalization.gsc import (
     InvalidGSCValue,
     is_blank,
@@ -33,6 +38,7 @@ from app.normalization.gsc import (
     normalize_position,
     normalize_url,
 )
+from app.normalization.report_scope import ScopeDeclaration
 
 MAX_FILE_SIZE = 5 * 1024 * 1024
 MAX_ROWS = 10_000
@@ -41,6 +47,9 @@ MAX_SAMPLE_ROWS = 10
 MAX_XLSX_EXPANDED_SIZE = 50 * 1024 * 1024
 
 RawRows = list[tuple[int, Sequence[Any]]]
+SourceTable = tuple[
+    Sequence[Any], RawRows, str | None, ReportingEvidence, ScopeDeclaration, list[str]
+]
 
 
 class ImportFileError(ValueError):
@@ -98,7 +107,7 @@ def _required_mapping(headers: Sequence[Any]) -> tuple[dict[str, int], dict[str,
     return indices, labels
 
 
-def _read_csv(content: bytes) -> tuple[Sequence[Any], RawRows, None, None, None]:
+def _read_csv(content: bytes) -> SourceTable:
     """Read UTF-8 CSV strictly and support the common comma, semicolon and tab separators.
     严格读取 UTF-8 CSV，并支持常见的逗号、分号及制表符分隔符。
     """
@@ -118,7 +127,7 @@ def _read_csv(content: bytes) -> tuple[Sequence[Any], RawRows, None, None, None]
         raise ImportFileError(
             "malformed_csv", "CSV cannot be read; check its delimiters and quotes."
         ) from exc
-    return headers, rows, None, None, None
+    return headers, rows, None, ReportingEvidence(), ScopeDeclaration(), []
 
 
 def _sheet_rows(sheet: Any) -> tuple[Sequence[Any], RawRows]:
@@ -171,9 +180,7 @@ def _has_page_url(rows: RawRows, url_index: int) -> bool:
     return False
 
 
-def _read_xlsx(
-    content: bytes,
-) -> tuple[Sequence[Any], RawRows, str, date | None, date | None]:
+def _read_xlsx(content: bytes) -> SourceTable:
     """Prefer recognized Pages sheets and require URL evidence for an unnamed fallback.
     优先选择已识别的网页工作表，并要求未命名回退表提供 URL 证据。
     """
@@ -187,14 +194,15 @@ def _read_xlsx(
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
         _validate_window(workbook)
         try:
-            period_start, period_end = extract_reporting_period(workbook, MAX_ROWS)
+            evidence = extract_reporting_evidence(workbook, MAX_ROWS)
         except PeriodWorksheetTooLarge as exc:
             raise ImportFileError("too_many_rows", str(exc)) from exc
+        observed_scope, scope_issues = extract_workbook_scope(workbook, MAX_ROWS)
         for preferred in PAGE_SHEET_NAMES:
             for name in workbook.sheetnames:
                 if normalize_label(name) == preferred:
                     headers, rows = _sheet_rows(workbook[name])
-                    return headers, rows, name, period_start, period_end
+                    return headers, rows, name, evidence, observed_scope, scope_issues
 
         candidates: list[tuple[Sequence[Any], RawRows, str]] = []
         for name in workbook.sheetnames:
@@ -216,7 +224,7 @@ def _read_xlsx(
                 "name the intended worksheet 'Pages' or '网页'.",
             )
         if candidates:
-            return *candidates[0], period_start, period_end
+            return *candidates[0], evidence, observed_scope, scope_issues
         raise ImportFileError(
             "pages_sheet_missing",
             "No GSC Pages worksheet was found. "
@@ -224,6 +232,8 @@ def _read_xlsx(
         )
     except ImportFileError:
         raise
+    except ScopeEvidenceError as exc:
+        raise ImportFileError(exc.code, exc.message) from exc
     except BadZipFile as exc:
         raise ImportFileError("malformed_xlsx", "XLSX is not a readable Excel workbook.") from exc
     except Exception as exc:
@@ -296,7 +306,9 @@ def _normalize_rows(
     return accepted, errors, invalid - duplicates, duplicates
 
 
-def parse_gsc_pages(content: bytes, filename: str) -> ParsedImport:
+def parse_gsc_pages(
+    content: bytes, filename: str, scope: ScopeDeclaration | None = None
+) -> ParsedImport:
     """Parse, validate and normalize a source upload without writing files or database records.
     解析、校验并标准化上传的源数据，不写入文件或数据库记录。
 
@@ -313,16 +325,33 @@ def parse_gsc_pages(content: bytes, filename: str) -> ParsedImport:
         raise ImportFileError("unsupported_file_type", "Choose a GSC Pages CSV or XLSX export.")
     if not content or not content.strip():
         raise ImportFileError("empty_file", "The uploaded file is empty.")
-    headers, rows, sheet, period_start, period_end = (
+    headers, rows, sheet, evidence, observed_scope, scope_issues = (
         _read_csv(content) if extension == ".csv" else _read_xlsx(content)
     )
+    try:
+        report_scope = resolve_scope(scope, observed_scope, scope_issues)
+    except ScopeEvidenceError as exc:
+        raise ImportFileError(exc.code, exc.message) from exc
     indices, labels = _required_mapping(headers)
     if not rows:
         raise ImportFileError("empty_file", "The file contains headers but no page rows.")
     accepted, errors, invalid, duplicates = _normalize_rows(rows, indices, len(headers))
+    file_hash = hashlib.sha256(content).hexdigest()
+    # Bind confirmation to normalized declarations and observed evidence as well as source bytes.
+    # 将确认同时绑定到标准化声明、观察证据及来源字节。
+    confirmation = json.dumps(
+        {"file_hash": file_hash, "report_scope": report_scope.model_dump(mode="json")},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
     preview = ImportPreview(
-        period_start=period_start,
-        period_end=period_end,
+        period_start=evidence.period_start,
+        period_end=evidence.period_end,
+        observed_date_count=evidence.observed_date_count,
+        dates_consecutive=evidence.dates_consecutive,
+        coverage_status=evidence.coverage_status,
+        report_scope=report_scope,
         detected_sheet=sheet,
         total_rows=len(rows),
         valid_rows=len(accepted),
@@ -332,6 +361,7 @@ def parse_gsc_pages(content: bytes, filename: str) -> ParsedImport:
         errors=errors[:MAX_ERRORS],
         sample_rows=accepted[:MAX_SAMPLE_ROWS],
         can_apply=not invalid and not duplicates,
-        preview_hash=hashlib.sha256(content).hexdigest(),
+        file_hash=file_hash,
+        preview_hash=hashlib.sha256(confirmation.encode("utf-8")).hexdigest(),
     )
     return ParsedImport(preview=preview, rows=accepted, filename=upload_basename)

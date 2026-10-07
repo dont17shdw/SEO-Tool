@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.imports.gsc.schemas import ParsedImport
-from app.models import ImportRun, PageMetricProvenance, PagePerformanceSnapshot, WebsitePage
+from app.models import ImportRun, PageMetricProvenance, PagePerformanceSnapshot, Site, WebsitePage
 
 GSC_FIELDS = ("clicks_28d", "impressions_28d", "ctr", "average_position")
 PROVENANCE_BATCH_SIZE = 1000
@@ -23,17 +23,31 @@ class ImportCounts:
 
 
 def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
-    """Atomically commit current metrics, history, snapshots, and explicit metric sources.
-    原子提交当前指标、历史、快照及明确的指标来源。
+    """Atomically commit site ownership, scoped history, metrics and explicit sources.
+    原子提交站点归属、带范围的历史、指标及明确来源。
 
-    A unique fingerprint reservation serializes identical imports before any page writes.
-    唯一指纹预留会在写入任何页面之前串行化相同文件的导入。
+    A file-and-scope reservation serializes retries before any page or provenance writes.
+    文件与范围联合预留会在写入任何页面或来源之前串行化重试。
     """
     preview = parsed.preview
     if not preview.can_apply or preview.total_rows != len(parsed.rows):
         raise ValueError("Only a complete, validated import can be persisted")
 
     with session.begin():
+        # Only explicit property evidence establishes ownership; URLs never assign legacy pages.
+        # 仅明确属性证据建立归属；绝不根据 URL 分配旧页面。
+        property_id = preview.report_scope.property_id
+        site_id = None
+        if property_id is not None:
+            site_id = session.execute(
+                insert(Site)
+                .values(identifier=property_id, display_name=property_id)
+                .on_conflict_do_nothing(index_elements=[Site.identifier])
+                .returning(Site.id)
+            ).scalar_one_or_none()
+            if site_id is None:
+                site_id = session.scalar(select(Site.id).where(Site.identifier == property_id))
+
         # Counts are provisional inside this transaction and finalized before commit.
         # 统计值在事务内部是临时值，会在提交前更新为最终结果。
         run_id = session.execute(
@@ -41,17 +55,28 @@ def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
             .values(
                 source="gsc",
                 source_type="pages_performance",
-                file_hash=preview.preview_hash,
+                file_hash=preview.file_hash,
+                scope_fingerprint=preview.report_scope.fingerprint,
+                report_scope=preview.report_scope.model_dump(mode="json"),
+                site_id=site_id,
                 filename=parsed.filename,
                 reporting_window=preview.reporting_window,
                 period_start=preview.period_start,
                 period_end=preview.period_end,
+                observed_date_count=preview.observed_date_count,
+                dates_consecutive=preview.dates_consecutive,
+                coverage_status=preview.coverage_status,
                 total_rows=preview.total_rows,
                 skipped_count=preview.total_rows,
                 status="completed",
             )
             .on_conflict_do_nothing(
-                index_elements=[ImportRun.source, ImportRun.source_type, ImportRun.file_hash]
+                index_elements=[
+                    ImportRun.source,
+                    ImportRun.source_type,
+                    ImportRun.file_hash,
+                    ImportRun.scope_fingerprint,
+                ]
             )
             .returning(ImportRun.id)
         ).scalar_one_or_none()
@@ -60,7 +85,8 @@ def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
                 select(ImportRun.id, ImportRun.total_rows).where(
                     ImportRun.source == "gsc",
                     ImportRun.source_type == "pages_performance",
-                    ImportRun.file_hash == preview.preview_hash,
+                    ImportRun.file_hash == preview.file_hash,
+                    ImportRun.scope_fingerprint == preview.report_scope.fingerprint,
                     ImportRun.status == "completed",
                 )
             ).one()
@@ -81,8 +107,8 @@ def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
             }
             statement = (
                 insert(WebsitePage)
-                .values(url=row.url, **supplied)
-                .on_conflict_do_nothing(index_elements=[WebsitePage.url])
+                .values(site_id=site_id, url=row.url, **supplied)
+                .on_conflict_do_nothing(index_elements=[WebsitePage.site_id, WebsitePage.url])
                 .returning(WebsitePage.id)
             )
             inserted_id = session.execute(statement).scalar_one_or_none()
@@ -91,7 +117,14 @@ def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
                 page_id = inserted_id
             else:
                 page = session.execute(
-                    select(WebsitePage).where(WebsitePage.url == row.url).with_for_update()
+                    select(WebsitePage)
+                    .where(
+                        WebsitePage.url == row.url,
+                        WebsitePage.site_id == site_id
+                        if site_id is not None
+                        else WebsitePage.site_id.is_(None),
+                    )
+                    .with_for_update()
                 ).scalar_one()
                 page_id = page.id
                 changed = False

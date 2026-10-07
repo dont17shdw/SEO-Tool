@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.models import SEOOpportunity, WebsitePage
+from app.models import SEOOpportunity, Site, WebsitePage
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -72,6 +72,7 @@ def test_postgresql_round_trip_preserves_unknown_zero_decimal_and_defaults(sessi
     session.commit()
     session.refresh(page)
     assert isinstance(page.id, UUID)
+    assert page.site_id is None
     assert page.clicks_7d == 0
     assert page.clicks_28d is None
     assert page.indexed is None
@@ -133,6 +134,28 @@ def test_postgresql_rejects_duplicate_page_urls(session):
     with pytest.raises(IntegrityError) as error:
         session.flush()
     assert error.value.orig.sqlstate == "23505"
+
+
+def test_postgresql_round_trip_keeps_distinct_explicit_property_page_identities(session):
+    """Equal page URLs do not merge separately evidenced GSC properties.
+    相同页面 URL 不合并具有独立证据的 GSC 属性。
+    """
+    sites = [
+        Site(identifier=f"sc-domain:{uuid4().hex}.example", display_name="Synthetic domain"),
+        Site(identifier=f"https://{uuid4().hex}.example/", display_name="Synthetic prefix"),
+    ]
+    session.add_all(sites)
+    session.flush()
+    url = f"https://example.com/{uuid4().hex}"
+    pages = [WebsitePage(url=url, site_id=site.id) for site in sites]
+    session.add_all(pages)
+    session.commit()
+    for site, page in zip(sites, pages, strict=True):
+        session.refresh(site)
+        session.refresh(page)
+        assert page.site_id == site.id
+        assert site.created_at.utcoffset() == timedelta(0)
+    assert pages[0].id != pages[1].id
 
 
 def test_postgresql_rejects_orphan_opportunities(session):
