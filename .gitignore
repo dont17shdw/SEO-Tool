@@ -31,3 +31,9 @@ work/
 .DS_Store
 .idea/
 .vscode/
+
+# Uploaded SEO source files stay outside Git; generate synthetic test data in code.
+# 上传的 SEO 源文件不进入 Git；测试数据在代码中合成生成。
+uploads/
+*.[cC][sS][vV]
+*.[xX][lL][sS][xX]

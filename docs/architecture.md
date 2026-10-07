@@ -2,127 +2,112 @@
 
 ## Scope / 范围
 
-Phase 1 creates a runnable foundation for the SEO Tool: a development frontend, a versioned backend health API, PostgreSQL models, and a migration. It does not ingest data, analyze SEO performance, calculate opportunity scores, or generate recommendations.
+Phase 1 established the Next.js frontend, FastAPI backend, PostgreSQL models, and Alembic migration. Phase 2 adds one complete manual Google Search Console (GSC) Pages import flow and a paginated, read-only page view.
+第一阶段建立 Next.js 前端、FastAPI 后端、PostgreSQL 模型及 Alembic 迁移。第二阶段增加一条完整的手动 Google Search Console（GSC）网页导入流程，以及分页的只读页面视图。
 
-第一阶段为 SEO Tool 建立可运行的基础：开发用前端、带版本的后端健康检查 API、PostgreSQL 模型及数据库迁移。此阶段不导入数据、不分析 SEO 表现、不计算机会评分，也不生成建议。
-
-The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**. V1 narrows that workflow to **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. Phase 1 provides the structure needed to build V1 incrementally; neither workflow is implemented yet.
-
-长期工作流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**。V1 将其范围收敛为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。第一阶段提供逐步构建 V1 所需的结构，尚未实现这些工作流程。
+The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**. V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. Phase 2 implements only **GSC FILE → PARSE → VALIDATE → NORMALIZE → PREVIEW → PERSIST → VIEW**. Analysis, scoring, recommendations, AI reasoning, and execution remain unimplemented.
+长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**。V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。第二阶段仅实现 **GSC FILE → PARSE → VALIDATE → NORMALIZE → PREVIEW → PERSIST → VIEW**。分析、评分、建议、AI 推理及执行仍未实现。
 
 ## Local runtime / 本地运行架构
 
 ```text
 Browser / 浏览器
-  ├── Next.js + React + TypeScript frontend / 前端
-  └── GET /api/v1/health
-        └── FastAPI backend / 后端
+  └── Next.js + React + TypeScript
+        ├── /                     Development and health page / 开发与健康检查页面
+        ├── /imports/gsc          File preview and confirmation / 文件预览与确认
+        └── /pages                Paginated page metrics / 分页页面指标
+              └── FastAPI /api/v1
+                    ├── Health / 健康检查
+                    ├── GSC parsing and normalization / GSC 解析与标准化
+                    └── SQLAlchemy → PostgreSQL
 
-Alembic migration / 数据库迁移
-  └── PostgreSQL
-
-Future data APIs / 未来数据 API
-  └── SQLAlchemy session / 数据库会话
-        └── PostgreSQL
+Alembic → Explicit database migrations / 显式数据库迁移
 ```
 
-Run the frontend and backend as local development processes. Docker Compose runs PostgreSQL only. This keeps the foundation small while giving later data APIs a real relational database and explicit schema migrations.
+The frontend and backend run as local processes; Docker Compose runs PostgreSQL only. The backend retains synchronous SQLAlchemy 2 sessions and psycopg 3. There is no task queue, server-side preview session, or permanent upload store.
+前端与后端以本地进程运行；Docker Compose 仅运行 PostgreSQL。后端沿用 SQLAlchemy 2 同步会话与 psycopg 3。当前没有任务队列、服务端预览会话或永久上传存储。
 
-前端和后端以本地开发进程运行。Docker Compose 仅运行 PostgreSQL。这样既保持基础架构精简，又为后续数据 API 提供实际的关系数据库与明确的数据库结构迁移。
-
-The frontend uses the Next.js App Router, React, and TypeScript. Its development page confirms that the frontend is running and provides a manual backend connection check with a five-second timeout and response validation. It does not implement an SEO dashboard or read database records.
-
-前端采用 Next.js App Router、React 和 TypeScript。开发页面确认前端已运行，并提供手动检查后端连接的入口，包括五秒超时与响应校验。它不实现 SEO 仪表盘，也不读取数据库记录。
-
-The backend uses FastAPI with synchronous SQLAlchemy 2 sessions and the psycopg 3 PostgreSQL driver. The initial API is small; an asynchronous database layer would add complexity without helping a current use case.
-
-后端采用 FastAPI、SQLAlchemy 2 同步会话及 psycopg 3 PostgreSQL 驱动。初始 API 范围很小，异步数据库层会增加复杂度，却无法满足当前尚不存在的需求。
-
-## Repository boundaries / 仓库职责边界
+## Module boundaries / 模块边界
 
 ```text
-frontend/                   Next.js application / Next.js 应用
-backend/
-  app/
-    api/                    HTTP routes and schemas / HTTP 路由与接口结构
-    config/                 Environment settings / 环境配置
-    db/                     Database sessions and base metadata / 数据库会话与基础元数据
-    models/                 Persistent records / 持久化记录
-    imports/                Future ingestion / 未来数据导入
-    normalization/          Future validation and normalization / 未来校验与标准化
-    analysis/               Future deterministic analysis / 未来确定性分析
-    scoring/                Future opportunity calculations / 未来机会评分计算
-    decision_engine/        Future prioritization and recommendations / 未来优先级与建议
-    ai/                     Future semantic reasoning / 未来语义推理
-    execution/              Reserved future execution boundary / 预留的未来执行边界
-  alembic/                  Alembic schema migrations / Alembic 数据库结构迁移
-  tests/                    Backend checks / 后端检查
-docs/                       Architecture and data model / 架构与数据模型
+backend/app/
+  api/v1/                   HTTP requests and response schemas / HTTP 请求与响应结构
+  config/                   Environment settings / 环境配置
+  db/                       SQLAlchemy sessions and base metadata / 会话与基础元数据
+  models/                   Persistent records / 持久化记录
+  imports/gsc/              GSC mapping, parsing, preview, persistence / GSC 映射、解析、预览、持久化
+  normalization/            Deterministic URL and metric validation / 确定性 URL 与指标校验
+  analysis/                 Reserved observations boundary / 预留观察结果边界
+  scoring/                  Reserved calculations boundary / 预留评分计算边界
+  decision_engine/          Reserved prioritization boundary / 预留优先级边界
+  ai/                       Reserved semantic reasoning boundary / 预留语义推理边界
+  execution/                Reserved future actions boundary / 预留未来行动边界
+backend/alembic/            Explicit schema migrations / 显式数据库结构迁移
+backend/tests/              Synthetic parser and database tests / 合成解析与数据库测试
+frontend/src/               Development routes and typed API client / 开发路由与带类型 API 客户端
+docs/                       Bilingual contracts and setup guidance / 双语契约与设置指南
 ```
 
-The future pipeline packages are boundaries, not working features. They reserve clear homes for later code without introducing placeholder SEO rules or artificial interfaces. HTTP routes should delegate processing to these modules as functionality is added.
+- **Imports:** Source-specific mapping accepts English and Chinese GSC page headers. The standard-library CSV reader and lightweight `openpyxl` reader handle source formats. Worksheet selection checks page semantics and URL dimensions, rather than selecting any sheet with similar performance columns.
+  **导入：** 数据源映射支持英文及中文 GSC 网页列名。标准库 CSV 读取器及轻量的 `openpyxl` 读取器负责文件格式。工作表选择检查网页语义与 URL 维度，不根据相似的性能指标列随意选择工作表。
+- **Normalization:** Validate absolute HTTP(S) URLs and metric values, trim surrounding whitespace, and produce the existing model's four GSC fields. Missing metrics remain unknown; normalization does not infer SEO classifications or rewrite URLs.
+  **标准化：** 校验绝对 HTTP(S) URL 与指标值，去除前后空白，并生成现有模型的四个 GSC 字段。缺失指标保持未知；标准化不推导 SEO 分类，也不重写 URL。
+- **API:** Routes handle bounded multipart uploads, typed responses, explicit confirmation, and useful public errors. They delegate source processing and database persistence to the import modules.
+  **API：** 路由处理有大小限制的 multipart 上传、带类型响应、显式确认及易理解的公开错误。它们将数据源处理与数据库持久化委托给导入模块。
+- **Persistence:** The import service upserts exact stored URL strings within one transaction. The models define database integrity without parsing files or making SEO judgments.
+  **持久化：** 导入服务在一个事务内按实际存储的 URL 字符串执行新增或更新。模型负责数据库完整性，不解析文件，也不进行 SEO 判断。
+- **Future processing:** Analysis, scoring, decision-making, AI reasoning, and execution remain separate. Deterministic code should perform calculations. Future AI provider details belong behind the AI boundary; recommendations must not cause external actions automatically.
+  **未来处理：** 分析、评分、决策、AI 推理与执行保持独立。计算应使用确定性代码。未来 AI 供应商细节属于 AI 边界内部；建议不得自动触发外部行动。
 
-未来数据流程的各个包用于划分职责，并非已实现的功能。它们为后续代码保留明确位置，而不引入占位 SEO 规则或人为设计的接口。随着功能增加，HTTP 路由应将处理工作委托给相应模块。
+## Preview and confirmation / 预览与确认
 
-- **Imports** receive source data and preserve source-specific handling; they should not decide SEO actions. **Normalization** validates and converts imported values into the shared model before persistence.
-- **导入模块**接收源数据并处理数据源差异，不应决定 SEO 行动。**标准化模块**在持久化前校验导入值，并将其转换为统一模型。
-- **Analysis** derives observations from normalized data. **Scoring** owns reproducible calculations and explicit scoring inputs. Neither module calls an AI model to perform arithmetic.
-- **分析模块**从标准化数据中提取观察结果。**评分模块**负责可复现的计算及明确的评分输入。两者均不调用 AI 模型进行算术计算。
-- **Decision engine** will choose priorities and explain recommendations using observations and scores. A persisted `SEOOpportunity` is a data contract, not an implemented decision algorithm.
-- **决策引擎**未来将结合观察结果与评分选择优先级，并解释建议。持久化的 `SEOOpportunity` 是数据契约，并不代表已实现决策算法。
-- **AI** will be used mainly for semantic analysis and reasoning when a concrete feature needs it. Keep model-provider details behind this boundary; Phase 1 has no provider SDK, model dependency, credentials, or calls.
-- **AI 模块**主要用于未来具体功能所需的语义分析与推理。模型供应商细节应封装在此边界内；第一阶段不包含供应商 SDK、模型依赖、凭证或调用。
-- **Execution** remains a separate future concern. A recommendation must not trigger publishing, outreach, emails, or other external actions. No execution service is implemented in Phase 1.
-- **执行**属于独立的未来职责。建议不得触发发布、外链联系、邮件或其他外部操作。第一阶段不实现执行服务。
+Preview parses and validates the upload without opening a database session or writing records. It reports source, worksheet, column mapping, row counts, errors, and normalized samples. Mapping and validation use deterministic code without AI.
+预览解析并校验上传文件，不打开数据库会话，也不写入记录。它报告数据源、工作表、列映射、行数、错误及标准化样本。映射与校验使用确定性代码，不使用 AI。
 
-## API and browser connection / API 与浏览器连接
+The browser retains the selected file. Confirmation submits that file again with `confirmed=true` and the returned `preview_hash`. The backend re-parses the entire upload and verifies its fingerprint before persistence; it does not trust client-provided normalized rows. Invalid rows or duplicate URLs block the entire import. No partial valid-row import is performed.
+浏览器保留选中的文件。确认时再次提交该文件，并附带 `confirmed=true` 与返回的 `preview_hash`。后端在持久化前重新解析整个上传内容并校验指纹，不信任客户端提供的标准化行。无效行或重复 URL 会阻止整个导入；不会仅导入其中的有效行。
 
-`GET /api/v1/health` is a liveness endpoint. It responds successfully when the backend process can serve requests and does not connect to PostgreSQL. A successful health response therefore confirms the API process, not database readiness. Check database connectivity by applying the migration during setup.
+The hash binds confirmation to the previewed file; it is not authentication, authorization, an import history, or a persistent server-side token. Re-submitting an unchanged file is safe: existing unchanged records are reported as skipped.
+哈希将确认绑定到已预览的文件；它不是身份认证、权限控制、导入历史或持久化的服务端令牌。重新提交相同文件是安全的：未发生变化的已有记录会计为跳过。
 
-`GET /api/v1/health` 是存活检查接口。后端进程能够处理请求时，该接口返回成功，且不会连接 PostgreSQL。因此，健康检查成功只能确认 API 进程可用，不能证明数据库已就绪。配置时通过执行迁移检查数据库连接。
+See [gsc-import.md](gsc-import.md) for aliases, reporting-window checks, normalization, limits, request examples, and duplicate semantics.
+列名别名、报告窗口检查、标准化、限制、请求示例与重复数据语义详见 [gsc-import.md](gsc-import.md)。
 
-The response is `{"status":"ok","service":"seo-tool-api"}`. The frontend validates this response before showing a connected state and reports an error if the API cannot be reached or the response is invalid.
+## Versioned API / 带版本的 API
 
-响应为 `{"status":"ok","service":"seo-tool-api"}`。前端在显示已连接状态前校验此响应；若无法连接 API 或响应无效，则显示错误。
+| Endpoint / 接口 | Behavior / 行为 |
+| --- | --- |
+| `GET /api/v1/health` | Application liveness; no database access.<br>应用存活检查；不访问数据库。 |
+| `POST /api/v1/imports/gsc/pages/preview` | Validate a CSV/XLSX upload; no persistence.<br>校验 CSV/XLSX 上传；不持久化。 |
+| `POST /api/v1/imports/gsc/pages/apply` | Revalidate and atomically persist an explicitly confirmed file.<br>重新校验并原子持久化已显式确认的文件。 |
+| `GET /api/v1/pages` | Read-only page metrics with basic pagination.<br>提供基本分页的只读页面指标。 |
 
-The `/api/v1` prefix establishes the first API version. No page or opportunity CRUD routes are included. FastAPI's OpenAPI document describes the implemented health endpoint and provides a place for future typed API contracts.
+The health response remains `{"status":"ok","service":"seo-tool-api"}`. It confirms the API process can serve requests, not that PostgreSQL is ready. FastAPI's `/docs` describes the implemented request and response contracts. There are no page editing/deletion endpoints or opportunity APIs.
+健康检查响应仍为 `{"status":"ok","service":"seo-tool-api"}`。它确认 API 进程能处理请求，不能证明 PostgreSQL 已就绪。FastAPI 的 `/docs` 描述已实现的请求与响应契约。当前没有页面编辑、删除接口或机会 API。
 
-`/api/v1` 前缀定义首个 API 版本。当前不包含页面或机会的增删改查路由。FastAPI 的 OpenAPI 文档描述已实现的健康检查接口，并为未来带类型的 API 契约提供位置。
+The browser calls the backend directly through `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://localhost:8000`. `CORS_ORIGINS` is an explicit JSON list of frontend origins. CORS supports the separate local ports; it is not an access-control system.
+浏览器通过 `NEXT_PUBLIC_API_BASE_URL` 直接调用后端，默认值为 `http://localhost:8000`。`CORS_ORIGINS` 是明确的前端来源 JSON 列表。CORS 支持本地不同端口；它不是访问控制系统。
 
-The browser calls the backend directly using `NEXT_PUBLIC_API_BASE_URL`, which defaults to `http://localhost:8000`. The frontend development server uses port `3000`. The backend allows only explicitly configured frontend origins through `CORS_ORIGINS`, a JSON list. This configuration supports separate local development ports; it is not an authentication or authorization system.
+## Schema and reporting windows / 数据库结构与报告窗口
 
-浏览器通过 `NEXT_PUBLIC_API_BASE_URL` 直接调用后端，默认值为 `http://localhost:8000`。前端开发服务器使用 `3000` 端口。后端通过 JSON 列表 `CORS_ORIGINS` 仅允许明确配置的前端来源。此配置用于支持本地开发中的不同端口，并非身份认证或授权系统。
+Phase 2 needs no new migration: the Phase 1 `WebsitePage` model already contains `clicks_28d`, `impressions_28d`, `ctr`, and `average_position`. PostgreSQL still stores `website_pages` and `seo_opportunities`; Phase 2 does not create opportunities. Schema changes remain explicit Alembic migrations, never automatic application-startup changes.
+第二阶段无需新增迁移：第一阶段的 `WebsitePage` 模型已包含 `clicks_28d`、`impressions_28d`、`ctr` 与 `average_position`。PostgreSQL 仍存储 `website_pages` 与 `seo_opportunities`；第二阶段不创建机会。数据库结构变化仍由显式 Alembic 迁移管理，不能在应用启动时自动变更。
 
-## Persistence and migrations / 持久化与迁移
+The supported import window is the latest 28 days. CSV has no workbook filter metadata, so the user must select that period before exporting. Supported XLSX filter metadata is validated when present. The database stores the latest supplied values, without observation-date anchors, import history, or dated snapshots; repeatedly uploading different files can replace prior metrics. See [data-model.md](data-model.md) for the exact write boundary and preservation rules.
+支持的导入窗口为最近 28 天。CSV 不包含工作簿筛选元数据，因此用户必须在导出前选择该时间段。XLSX 存在受支持的筛选元数据时会进行校验。数据库存储最新提供的指标，没有观察日期基准、导入历史或带日期的快照；多次上传不同文件可能替换此前指标。明确的写入边界与保留规则详见 [data-model.md](data-model.md)。
 
-PostgreSQL stores `website_pages` and `seo_opportunities`. SQLAlchemy defines shared model metadata and Alembic manages schema changes. Apply migrations explicitly; starting FastAPI must not create tables or alter the database automatically.
+## Configuration and limits / 配置与限制
 
-PostgreSQL 存储 `website_pages` 和 `seo_opportunities`。SQLAlchemy 定义共享模型元数据，Alembic 管理数据库结构变化。应显式执行迁移；启动 FastAPI 不应自动创建表或修改数据库。
+Keep real credentials and environment files outside Git. `DATABASE_URL` uses `postgresql+psycopg://`. Next.js includes `NEXT_PUBLIC_API_BASE_URL` in browser code at build time; changing it requires restarting development or rebuilding. Installation and local commands are in [README.md](../README.md).
+真实凭据与环境文件不得提交到 Git。`DATABASE_URL` 使用 `postgresql+psycopg://`。Next.js 在构建时将 `NEXT_PUBLIC_API_BASE_URL` 写入浏览器代码；修改后需要重启开发服务器或重新构建。安装与本地命令位于 [README.md](../README.md)。
 
-A website page can have multiple opportunities. The initial schema stores normalized fields and enforces basic data integrity. It does not define SEO thresholds, opportunity taxonomies, scoring formulas, or automated recommendations. See [data-model.md](data-model.md) for field semantics and constraints.
+Uploads are bounded to 5 MiB and 10,000 data rows. Preview returns at most 100 validation errors and 10 normalized samples while retaining full row counts. Source uploads are processed ephemerally and must not be committed; automated tests generate synthetic files. This is a local development interface without authentication or a production deployment plan.
+上传限制为 5 MiB 与 10,000 个数据行。预览最多返回 100 个校验错误与 10 个标准化样本，同时保留完整行数统计。源上传文件仅作临时处理，不得提交；自动化测试生成合成文件。这是没有身份认证或生产部署方案的本地开发界面。
 
-一个网站页面可以对应多个机会。初始结构存储标准化字段并约束基本数据完整性，但不定义 SEO 阈值、机会分类、评分公式或自动建议。字段语义与约束详见 [data-model.md](data-model.md)。
+Phase 2 does not include GSC/GA4 APIs, query-level imports, indexing reports, analysis, scoring, opportunity generation, a Decision Engine, AI calls, content generation, WordPress, outreach, background jobs, or autonomous actions.
+第二阶段不包含 GSC/GA4 API、查询级导入、索引报告、分析、评分、机会生成、决策引擎、AI 调用、内容生成、WordPress、外链联系、后台任务或自主行动。
 
-## Configuration and operational limits / 配置与运行限制
+## Suggested Phase 3 / 建议的第三阶段
 
-Environment examples document local configuration. Keep real environment files and credentials outside Git. Backend settings own database connectivity and allowed browser origins; frontend public settings must contain only values safe to expose in browser code.
-
-环境变量示例记录本地配置。真实环境文件及凭证不得提交到 Git。后端配置负责数据库连接与允许的浏览器来源；前端公开配置只能包含允许暴露在浏览器代码中的值。
-
-`DATABASE_URL` must use the `postgresql+psycopg://` driver scheme. Next.js includes `NEXT_PUBLIC_API_BASE_URL` in browser code at build time, so restart the development server or rebuild after changing it. See the root [README.md](../README.md) for installation, migration, and startup commands.
-
-`DATABASE_URL` 必须使用 `postgresql+psycopg://` 驱动协议。Next.js 在构建时将 `NEXT_PUBLIC_API_BASE_URL` 写入浏览器代码，因此修改后应重启开发服务器或重新构建。安装、迁移与启动命令详见根目录 [README.md](../README.md)。
-
-There is no task queue, scheduler, cache, vector database, AI provider, production deployment configuration, authentication, or observability platform in Phase 1. Add infrastructure only when an implemented feature requires it. The current development setup is not a production deployment plan.
-
-第一阶段不包含任务队列、调度器、缓存、向量数据库、AI 供应商、生产部署配置、身份认证或可观测平台。只有当已实现的功能确实需要时才增加基础设施。当前开发配置并非生产部署方案。
-
-## Recommended Phase 2 / 建议的第二阶段范围
-
-Implement one manually uploaded CSV format for website page metrics. Document its columns, units, and validation rules; validate and normalize it deterministically; persist the resulting `WebsitePage` records; and expose a paginated, read-only page list through the V1 API and a minimal frontend view.
-
-实现一种手动上传的网站页面指标 CSV 格式。记录其列名、单位和校验规则；通过确定性代码进行校验与标准化；持久化生成的 `WebsitePage` 记录；通过 V1 API 提供分页的只读页面列表，并添加最小前端视图。
-
-Decide the import contract for duplicate URLs, missing values, malformed rows, and the metric observation window before implementation. Test valid imports, invalid input, duplicate behavior, database persistence, and pagination. Do not include opportunity scoring, SEO recommendations, external integrations, AI calls, execution, or production deployment in that step.
-
-实施前明确重复 URL、缺失值、格式错误行及指标观察时间窗口的导入契约。测试有效导入、无效输入、重复数据处理、数据库持久化及分页。该阶段不包含机会评分、SEO 建议、外部集成、AI 调用、执行或生产部署。
+Add deterministic, read-only data-quality and latest-28-day observations with explicit evidence and missing-data handling. Define the evidence required for any later recommendation rules before implementing them. Current imports do not provide previous-period or seven-day metrics, so they cannot support reliable trend comparisons. Do not expand this into a full Decision Engine, scoring system, AI integration, or execution. Phase 3 has not started.
+增加确定性的只读数据质量检查与最近 28 天观察结果，明确证据及缺失数据的处理方式。在实现后续建议规则之前，先定义其所需证据。当前导入不提供前一时间段或七天指标，因此无法支持可靠的趋势对比。不要将其扩展为完整的决策引擎、评分系统、AI 集成或执行功能。第三阶段尚未开始。

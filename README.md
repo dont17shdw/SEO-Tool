@@ -1,7 +1,7 @@
 # SEO Tool
 
-An AI-assisted SEO operations system. Phase 1 provides a runnable foundation only.
-由 AI 辅助的 SEO 运营系统。Phase 1 仅提供可运行的基础框架。
+An AI-assisted SEO operations system. Phase 1 provides the foundation; Phase 2 adds manual GSC Pages CSV/XLSX import, validation, preview, transactional persistence, and a read-only page list.
+由 AI 辅助的 SEO 运营系统。第一阶段提供基础框架；第二阶段增加手动 GSC 网页 CSV/XLSX 导入、校验、预览、事务持久化及只读页面列表。
 
 Long-term workflow: `DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`.
 长期流程：`DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`。
@@ -49,8 +49,8 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000>. The development page confirms that the frontend runs and offers a backend connection check. API documentation is at <http://localhost:8000/docs>.
-打开 <http://localhost:3000>。开发页面确认前端已运行，并提供后端连接检查。API 文档位于 <http://localhost:8000/docs>。
+Open <http://localhost:3000> for the development health page, <http://localhost:3000/imports/gsc> to preview and confirm a GSC import, and <http://localhost:3000/pages> for the read-only page list. API documentation is at <http://localhost:8000/docs>.
+打开 <http://localhost:3000> 查看开发健康检查页面，打开 <http://localhost:3000/imports/gsc> 预览并确认 GSC 导入，打开 <http://localhost:3000/pages> 查看只读页面列表。API 文档位于 <http://localhost:8000/docs>。
 
 ```sh
 curl http://localhost:8000/api/v1/health
@@ -62,8 +62,22 @@ The health endpoint checks application liveness only; it does not confirm databa
 If you change the database credentials or port in the root `.env`, update `DATABASE_URL` in `backend/.env` to match. Configure allowed browser origins using the JSON array `CORS_ORIGINS`; the frontend uses `NEXT_PUBLIC_API_BASE_URL`. Compose binds PostgreSQL to the local machine only. Database credentials initialize a new volume; changing them does not update an existing database role.
 如果修改根目录 `.env` 中的数据库凭据或端口，请同步修改 `backend/.env` 中的 `DATABASE_URL`。通过 JSON 数组 `CORS_ORIGINS` 配置允许的浏览器来源；前端使用 `NEXT_PUBLIC_API_BASE_URL`。Compose 仅在本机绑定 PostgreSQL 端口。数据库凭据用于初始化新数据卷；更改这些值不会更新已有数据库角色。
 
-For an existing PostgreSQL instance, skip Compose, set `DATABASE_URL`, and apply the Alembic migration. The applications run on the host; Phase 1 does not containerize them.
-使用已有 PostgreSQL 实例时，可跳过 Compose，设置 `DATABASE_URL` 并执行 Alembic 迁移。应用在宿主机上运行；Phase 1 不对应用进行容器化。
+For an existing PostgreSQL instance, skip Compose, set `DATABASE_URL`, and apply the Alembic migration. The applications run on the host. Phase 2 requires no additional migration because the four imported GSC fields already exist.
+使用已有 PostgreSQL 实例时，可跳过 Compose，设置 `DATABASE_URL` 并执行 Alembic 迁移。应用在宿主机上运行。第二阶段无需额外迁移，因为四个导入的 GSC 字段已经存在。
+
+## GSC import / GSC 导入
+
+Export the GSC Pages performance table for the latest 28 days as CSV or XLSX. English and Chinese exports are supported, including the `Pages` / `网页` worksheet and localized headers. CSV must use UTF-8 (an optional BOM is supported).
+将 GSC 网页性能表的最近 28 天数据导出为 CSV 或 XLSX。支持英文与中文导出，包括 `Pages` / `网页` 工作表及本地化列名。CSV 必须使用 UTF-8（支持可选的 BOM）。
+
+Select the file at `/imports/gsc`, preview the detected mapping, counts, errors, and normalized samples, then explicitly confirm import. Preview does not write to the database. Correct every invalid or duplicate row before importing; imports are applied as one transaction. The `/pages` view displays the stored metrics with pagination.
+在 `/imports/gsc` 选择文件，预览识别出的映射、行数、错误及标准化样本，再显式确认导入。预览不会写入数据库。导入前请修正每个无效或重复行；导入在一个事务内执行。`/pages` 视图分页显示已存储指标。
+
+Only `clicks_28d`, `impressions_28d`, `ctr`, and `average_position` are imported. Unknown metrics remain `NULL` on new pages; blank incoming values preserve existing metrics. Other page fields are preserved. Real uploaded exports are not stored permanently or used as automated test fixtures.
+仅导入 `clicks_28d`、`impressions_28d`、`ctr` 与 `average_position`。新页面的未知指标保持 `NULL`；传入的空值会保留已有指标。其他页面字段保持不变。真实上传导出文件不会永久保存，也不会用作自动化测试数据。
+
+Uploads are limited to 5 MiB and 10,000 data rows. This is a local development workflow with no authentication. See [the GSC import contract](docs/gsc-import.md) for supported headers, reporting-window behavior, normalization, API requests, and current limitations.
+上传限制为 5 MiB 与 10,000 个数据行。这是没有身份认证的本地开发流程。支持的列名、报告窗口行为、标准化、API 请求及当前限制详见 [GSC 导入契约](docs/gsc-import.md)。
 
 ## Checks / 检查
 
@@ -73,6 +87,7 @@ Run each command block from the repository root in its own terminal.
 ```sh
 cd backend
 uv run ruff check .
+uv run ruff format --check .
 uv run pytest
 uv run alembic check
 ```
@@ -98,18 +113,19 @@ npm run build
 ## Structure and boundaries / 结构与边界
 
 ```text
-backend/              FastAPI, database models, Alembic migrations, tests
-frontend/             Next.js, React, TypeScript development page
-docs/architecture.md  Component boundaries and Phase 1 scope
-docs/data-model.md    Initial PostgreSQL schema and field semantics
-compose.yaml          Local PostgreSQL service only
+backend/              FastAPI, GSC importer, SQLAlchemy, Alembic, tests / API、导入、数据层、迁移、测试
+frontend/             Next.js development, import, page-list views / 开发、导入、页面列表视图
+docs/architecture.md  Component boundaries and current scope / 模块边界与当前范围
+docs/data-model.md    PostgreSQL fields and preservation rules / 字段与保留规则
+docs/gsc-import.md    GSC formats, normalization, workflow, APIs / 格式、标准化、流程、API
+compose.yaml          Local PostgreSQL service only / 仅本地 PostgreSQL 服务
 ```
 
-The backend reserves separate modules for imports, normalization, analysis, scoring, decisions, AI reasoning, and future execution. Their business logic is not implemented. There are no SEO rules, integrations, AI provider calls, background jobs, or autonomous actions in Phase 1.
-后端为导入、标准化、分析、评分、决策、AI 推理和未来执行预留独立模块，尚未实现其业务逻辑。Phase 1 不包含 SEO 规则、集成、AI 提供商调用、后台任务或自主行动。
+Imports and normalization implement the GSC file workflow. Analysis, scoring, decisions, AI reasoning, and future execution remain separate reserved modules. Phase 2 does not implement SEO analysis or recommendations, GSC/GA4 API integrations, AI calls, background jobs, autonomous actions, or production deployment.
+导入与标准化模块实现 GSC 文件流程。分析、评分、决策、AI 推理及未来执行仍为独立预留模块。第二阶段不实现 SEO 分析或建议、GSC/GA4 API 集成、AI 调用、后台任务、自主行动或生产部署。
 
-Read [architecture](docs/architecture.md), [data model](docs/data-model.md), and [agent instructions](AGENTS.md) before extending the foundation.
-扩展基础框架之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)和[代理开发指南](AGENTS.md)。
+Read [architecture](docs/architecture.md), [data model](docs/data-model.md), [GSC import](docs/gsc-import.md), and [agent instructions](AGENTS.md) before extending the application. Important documentation and non-trivial code comments/docstrings use English first, Chinese second.
+扩展应用之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)、[GSC 导入文档](docs/gsc-import.md)和[代理开发指南](AGENTS.md)。重要文档及非简单代码注释、文档字符串使用英文在前、中文在后的双语形式。
 
 To stop the local database while retaining its data, run `docker compose down` from the repository root.
 如需停止本地数据库并保留数据，请从仓库根目录运行 `docker compose down`。
