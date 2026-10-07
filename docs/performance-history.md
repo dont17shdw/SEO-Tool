@@ -30,8 +30,8 @@ Only `status="completed"` runs are persisted by this workflow. Run row counts de
 Uniqueness on `(source, source_type, file_hash)` prevents duplicate successful imports. Exact repeated bytes return `already_processed=true`, the original `import_run_id`, `created_count=0`, `updated_count=0`, `skipped_count=total_rows`, and `error_count=0`. No new run or snapshot is created, and current pages are not rewritten. This remains true if a different file updated those pages after the original import; retrying the old file does not restore old metrics. The original run's filename and outcome counts remain unchanged.
 `(source, source_type, file_hash)` 唯一性防止成功导入重复。完全相同的重复字节返回 `already_processed=true`、原 `import_run_id`、`created_count=0`、`updated_count=0`、`skipped_count=total_rows` 与 `error_count=0`。不创建新的导入或快照，也不重写当前页面。即使原导入之后另一个文件更新了这些页面，此行为仍成立；重试旧文件不会恢复旧指标。原导入的文件名与处理统计保持不变。
 
-The hash represents uploaded bytes, not the filename or semantic equality of rows. Same filename with changed contents creates a new run. Renaming identical bytes does not. Different CSV formatting or XLSX packaging can produce a new hash even when metrics match. Multiple different files for one reporting period are retained as revisions; comparison chooses the latest imported revision for that exact period.
-哈希代表上传字节，不代表文件名或行的语义等价性。同名但内容变化会创建新导入。重命名相同字节不会。CSV 格式或 XLSX 打包方式不同，即使指标相同，也可能产生新哈希。同一报告时间段的多个不同文件作为修订保留；对比为该准确时间段选择最近导入的修订。
+The hash represents uploaded bytes, not the filename or semantic equality of rows. Same filename with changed contents creates a new run. Renaming identical bytes does not. Different CSV formatting or XLSX packaging can produce a new hash even when metrics match. Multiple different files with the same date bounds remain in history. For one page/source/type/window and exact period, comparison chooses its latest imported snapshot revision. Matching import-level dates alone do not prove the same GSC property or filter scope.
+哈希代表上传字节，不代表文件名或行的语义等价性。同名但内容变化会创建新导入。重命名相同字节不会。CSV 格式或 XLSX 打包方式不同，即使指标相同，也可能产生新哈希。日期范围相同的多个不同文件保留在历史中。对于同一页面、来源、类型、窗口及准确时间段，对比选择其最近导入的快照修订。仅有导入级日期匹配，不能证明同一 GSC 属性或筛选范围。
 
 ## Reporting-period extraction / 报告时间段提取
 
@@ -59,14 +59,14 @@ Replace `PAGE_UUID` with a page ID from `GET /api/v1/pages`. Both history endpoi
 
 - `GET /api/v1/imports` lists runs newest import first. Items include `id`, `source`, `source_type`, `file_hash`, `filename`, `reporting_window`, `period_start`, `period_end`, `period_status`, `imported_at`, `total_rows`, `created_count`, `updated_count`, `skipped_count`, and `status`.
   `GET /api/v1/imports` 按最新导入在前列出记录。条目包含 `id`、`source`、`source_type`、`file_hash`、`filename`、`reporting_window`、`period_start`、`period_end`、`period_status`、`imported_at`、`total_rows`、`created_count`、`updated_count`、`skipped_count` 与 `status`。
-- `GET /api/v1/pages/{page_id}/performance` also returns `current_page`, `comparison`, and `comparison_unavailable_reason`. Snapshots are ordered by `imported_at`, then snapshot `id`, ascending. Items include snapshot/run/page IDs, URL, source/type/window, period dates/status, import/creation timestamps, and `clicks`, `impressions`, `ctr`, and `average_position`. This is chronological import order, which may differ from reporting-date order.
-  `GET /api/v1/pages/{page_id}/performance` 还返回 `current_page`、`comparison` 与 `comparison_unavailable_reason`。快照按 `imported_at`、其次快照 `id` 升序排列。条目包含快照、导入、页面 ID、URL、来源与类型、窗口、时间段日期与状态、导入与创建时间戳，以及 `clicks`、`impressions`、`ctr` 与 `average_position`。这是导入时间顺序，可能与报告日期顺序不同。
+- `GET /api/v1/pages/{page_id}/performance` also returns `current_page`, `comparison`, `comparison_unavailable_reason`, and runtime `quality`. Snapshots are ordered by `imported_at`, then snapshot `id`, ascending. Items include snapshot/run/page IDs, URL, source/type/window, period dates/status, import/creation timestamps, and `clicks`, `impressions`, `ctr`, and `average_position`. This is chronological import order, which may differ from reporting-date order.
+  `GET /api/v1/pages/{page_id}/performance` 还返回 `current_page`、`comparison`、`comparison_unavailable_reason` 与运行时 `quality`。快照按 `imported_at`、其次快照 `id` 升序排列。条目包含快照、导入、页面 ID、URL、来源与类型、窗口、时间段日期与状态、导入与创建时间戳，以及 `clicks`、`impressions`、`ctr` 与 `average_position`。这是导入时间顺序，可能与报告日期顺序不同。
 
 Dates serialize as ISO calendar dates; timestamps retain offsets. Decimal metrics/changes serialize as strings and missing values as `null`. `period_status` is computed from the paired date fields, without a separate persisted flag. Pagination uses offsets and does not freeze history across concurrent imports.
 日期序列化为 ISO 日历日期；时间戳保留偏移。小数指标与变化序列化为字符串，缺失值序列化为 `null`。`period_status` 根据成对日期字段计算，不另行持久化标记。分页使用偏移量，不会跨并发导入冻结历史。
 
-The `/imports/history` development screen shows successful runs, dates or unknown status, counts, and import status. `/pages` links to `/pages/[id]`, which separates current stored metrics from historical snapshots and the selected period comparison. There are no editing/deletion controls or final SEO dashboard.
-`/imports/history` 开发页面显示成功导入、日期或未知状态、计数及导入状态。`/pages` 链接到 `/pages/[id]`，后者将当前存储指标与历史快照及选中的时间段对比分开显示。没有编辑删除控制或最终 SEO 仪表盘。
+The `/imports/history` development screen shows successful runs, dates or unknown status, counts, and import status. `/pages` links to `/pages/[id]`, which separates current stored metrics from historical snapshots, the selected period comparison, and its data-quality section. There are no editing/deletion controls or final SEO dashboard.
+`/imports/history` 开发页面显示成功导入、日期或未知状态、计数及导入状态。`/pages` 链接到 `/pages/[id]`，后者将当前存储指标与历史快照、选中的时间段对比及其数据质量部分分开显示。没有编辑删除控制或最终 SEO 仪表盘。
 
 ## Compatible comparison selection / 兼容对比选择
 
@@ -94,10 +94,18 @@ If previous clicks are `NULL`, a known current value does not yield a change. If
 Changes are descriptive numbers. They do not establish causation, declare performance good/bad, assign opportunity scores, or generate recommendations. No AI is used for selection or arithmetic.
 变化是描述性数值。它们不建立因果关系，不判断表现好坏，不分配机会评分，也不生成建议。选择与计算均不使用 AI。
 
+## Phase 4 quality integration / 第四阶段质量集成
+
+`analysis/data_quality.py` reuses the selected comparison and the same full history to report evidence limitations and page readiness. It does not duplicate arithmetic, change pair selection, modify records, or store observations. The embedded `quality` and dedicated quality endpoints are independent of snapshot pagination. See [data-quality.md](data-quality.md) for stable codes, severities, counts, and exact readiness rules.
+`analysis/data_quality.py` 复用选中的对比及同一完整历史，报告证据限制与页面就绪度。它不重复计算、不改变对的选择、不修改记录，也不存储观察。内嵌 `quality` 与独立质量接口均独立于快照分页。稳定代码、严重程度、计数及准确就绪度规则详见 [data-quality.md](data-quality.md)。
+
+An old report is provably imported out of order only when its `imported_at` is strictly later than evidence with a newer `period_end` in the same source/type/window group. Equal import timestamps do not establish this ordering, even though IDs provide deterministic display ties. Current-state metric provenance remains unproven because the schema has no per-metric source references and may lack earlier/manual changes; no `current_state_not_single_snapshot` observation is emitted.
+只有在同一来源、类型、窗口组内，旧报告的 `imported_at` 严格晚于具有更新 `period_end` 的证据时，才可证明其乱序导入。相同导入时间戳不能确定该顺序，即使 ID 可用于确定性的显示并列处理。由于数据库结构没有逐指标来源引用，且可能缺少较早或手动变化，当前状态指标来源仍无法证明；不生成 `current_state_not_single_snapshot` 观察。
+
 ## Migration and limits / 迁移与限制
 
 Upgrade with `uv run alembic upgrade head` from `backend/`. Revision `0002_import_history` creates run/snapshot tables, keys, constraints, and indexes while preserving existing page/opportunity data. Earlier imports have no fabricated history. Downgrade removes the new history tables and their data, retaining current pages. Model details are in [data-model.md](data-model.md).
 在 `backend/` 中运行 `uv run alembic upgrade head` 升级。修订 `0002_import_history` 创建导入与快照表、键、约束及索引，保留已有页面与机会数据。此前导入没有编造的历史。降级移除新历史表及其数据，保留当前页面。模型详情见 [data-model.md](data-model.md)。
 
-This is a local development history interface. There is no authentication, per-site ownership, permanent source upload storage, failed-attempt log, full audit system, history edit/delete API, automatic import scheduling, or retention policy. Page comparison currently loads that page's full history into memory even though the displayed snapshots are paginated; it is intended for development-scale history. Known endpoints do not certify complete reporting coverage, and comparisons do not establish independent periods or statistical significance. Tests use synthetic files; real exports stay outside Git. SEO scoring, recommendations, Decision Engine, AI, integrations, execution, and production deployment remain outside Phase 3. Phase 4 has not started.
-这是本地开发历史界面。没有身份认证、站点归属、永久源上传存储、失败尝试日志、完整审计系统、历史编辑删除 API、自动导入调度或保留策略。虽然展示的快照有分页，当前页面对比仍将该页面的完整历史读入内存，适用于开发规模的历史数据。已知起止日期不能证明完整报告覆盖，对比不证明时间段独立或统计显著性。测试使用合成文件；真实导出保留在 Git 之外。SEO 评分、建议、决策引擎、AI、集成、执行及生产部署仍不属于第三阶段。第四阶段尚未开始。
+This is a local development history interface. There is no authentication, per-site ownership/filter provenance, permanent source upload storage, failed-attempt log, full audit system, history edit/delete API, automatic import scheduling, or retention policy. Page comparison and quality load the page's full history into memory even though displayed snapshots are paginated; this is intended for development-scale history. Known endpoints and readiness do not certify export completeness, full 28-day coverage, matching filter scope, source accuracy, period independence, or statistical significance. Tests use synthetic files; real exports stay outside Git. SEO scoring, recommendations, Decision Engine, AI, integrations, execution, and production deployment remain outside Phase 4. Phase 5 has not started.
+这是本地开发历史界面。没有身份认证、站点归属与筛选来源追踪、永久源上传存储、失败尝试日志、完整审计系统、历史编辑删除 API、自动导入调度或保留策略。虽然展示的快照有分页，页面对比与质量仍将页面完整历史读入内存，适用于开发规模的历史数据。已知起止日期及就绪度不能证明导出完整性、完整 28 天覆盖、筛选范围一致、来源准确性、时间段独立或统计显著性。测试使用合成文件；真实导出保留在 Git 之外。SEO 评分、建议、决策引擎、AI、集成、执行及生产部署仍不属于第四阶段。第五阶段尚未开始。

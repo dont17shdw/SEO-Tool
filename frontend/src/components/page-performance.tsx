@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback } from "react";
 import { HistoryControls, HistoryPagination } from "@/components/history-pagination";
 import { PageMetricsTable } from "@/components/page-metrics-table";
+import { PageDataQuality } from "@/components/page-data-quality";
 import { formatMetric } from "@/lib/gsc-api";
 import { formatChange, formatImportTime, formatPeriod, getPagePerformance, type PerformanceComparison } from "@/lib/history-api";
 import { usePaginatedResource } from "@/lib/use-paginated-resource";
@@ -59,6 +60,8 @@ export function PagePerformance({ pageId }: { pageId: string }) {
             <p>Latest successfully supplied values, following import order. Blank metrics preserve earlier values. This row may combine imports and is not a dated snapshot. 按导入顺序显示最新成功提供的值。空白指标保留此前值。此行可能组合多个导入，并非带日期的快照。</p>
             <PageMetricsTable rows={[data.current_page]} />
           </section>
+
+          <PageDataQuality quality={data.quality} />
 
           {data.comparison ? <PeriodComparison comparison={data.comparison} /> : (
             <section className="card" aria-labelledby="comparison-heading">

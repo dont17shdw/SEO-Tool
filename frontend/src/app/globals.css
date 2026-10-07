@@ -171,6 +171,26 @@ th {
   margin: 0;
 }
 
+.quality-observations {
+  padding-left: 1.25rem;
+}
+
+.quality-observations li {
+  margin: 1rem 0;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.quality-details {
+  margin: 0.75rem 0;
+  overflow-wrap: anywhere;
+}
+
+.quality-details summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
 select {
   padding: 0.5rem;
   border: 1px solid var(--border);
