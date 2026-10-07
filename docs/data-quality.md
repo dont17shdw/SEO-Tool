@@ -8,8 +8,8 @@ Phase 4 explains the factual evidence available for descriptive GSC page-perform
 `analysis/performance_comparison.py` continues to select the Phase 3 pair and calculate changes. `analysis/data_quality.py` consumes the comparison result, full snapshot history, and import metadata to explain evidence limitations. It neither duplicates arithmetic nor changes the selected pair. The analysis functions are deterministic and have no database access, writes, external calls, or observation persistence.
 `analysis/performance_comparison.py` 继续选择第三阶段对比对并计算变化。`analysis/data_quality.py` 使用对比结果、完整快照历史及导入元数据解释证据限制。它既不重复计算，也不改变所选对。分析函数具有确定性，不访问数据库、不写入、不调用外部服务，也不持久化观察。
 
-No migration is required. Schema head remains `0002_import_history`; existing `WebsitePage`, `ImportRun`, and `PagePerformanceSnapshot` records are read unchanged. Quality requests do not fill `NULL`, rewrite history, or create `SEOOpportunity` records. The import validation and atomic persistence contracts are unchanged.
-无需迁移。数据库结构最新修订仍为 `0002_import_history`；已有 `WebsitePage`、`ImportRun` 与 `PagePerformanceSnapshot` 记录保持不变地读取。质量请求不填补 `NULL`、不重写历史，也不创建 `SEOOpportunity` 记录。导入校验及原子持久化契约保持不变。
+Phase 4 quality needed no migration. Phase 5 adds `0003_current_metric_provenance` for explicit current-source links, while preserving these historical quality rules. Quality requests still read existing history without filling `NULL`, rewriting rows, or creating `SEOOpportunity` records. Current provenance is a separate runtime result, not an input to comparison readiness.
+第四阶段质量无需迁移。第五阶段为明确当前来源关联增加 `0003_current_metric_provenance`，同时保留这些历史质量规则。质量请求仍读取已有历史，不填补 `NULL`、不重写行，也不创建 `SEOOpportunity` 记录。当前来源为独立运行时结果，不是对比就绪度输入。
 
 ## Observation contract / 观察契约
 
@@ -103,11 +103,14 @@ Invalid UUIDs return `422`; unknown page/import IDs return `404` with `page_not_
 
 ## Unprovable conditions and limits / 无法证明的条件与限制
 
-`current_state_not_single_snapshot` is deliberately not emitted. `WebsitePage` can carry forward nonblank metrics from earlier imports, but it has no per-metric source reference. Earlier imports may lack snapshots, and manual/direct SQL changes have no complete provenance. Value matching or replaying known history cannot reliably establish origin. The system documents this uncertainty rather than inventing a detection rule.
-有意不生成 `current_state_not_single_snapshot`。`WebsitePage` 可沿用较早导入的非空白指标，但没有逐指标来源引用。较早导入可能没有快照，手动或直接 SQL 变化没有完整来源追踪。值匹配或重放已知历史无法可靠确定来源。系统记录该不确定性，不编造检测规则。
+Phase 4 could not prove `current_state_not_single_snapshot` without per-field source links. Phase 5 now records links during new imports and emits that `info` observation in the separate `provenance` result only for multiple validated known snapshot IDs. `unknown_current_metric_provenance` describes non-`NULL` current values without valid recorded origins; it does not imply a mixed state. Neither observation changes historical quality or readiness. See [current-provenance.md](current-provenance.md).
+第四阶段在缺少逐字段来源关联时，无法证明 `current_state_not_single_snapshot`。第五阶段现在于新导入时记录关联，仅在多个已验证已知快照 ID 时，在独立 `provenance` 结果中生成该 `info` 观察。`unknown_current_metric_provenance` 描述没有有效已记录来源的非 `NULL` 当前值；它不表示混合状态。两个观察都不改变历史质量或就绪度。详见 [current-provenance.md](current-provenance.md)。
+
+Earlier imports may lack snapshots or provenance. Matching values and replaying history cannot establish missing sources. Direct SQL can bypass the controlled writer, and equal-value manual edits can remain undetectable. Legacy provenance remains unknown without backfill.
+较早导入可能缺少快照或来源。值匹配及重放历史不能建立缺失来源。直接 SQL 可绕过受控写入器，相同值手动编辑可能仍无法检测。旧来源保持未知，不回填。
 
 Observations cover only stored evidence, not unknown source rows, export coverage, authentication, property ownership, report filters, or unobserved changes. Quality uses full history in memory and may aggregate substantial evidence without paging individual observations; it is intended for development-scale data. Existing upload/resource limits remain unchanged. Observations are recomputed, without an audit log or persisted analysis version. Tests use synthetic fixtures; private exports remain outside Git.
 观察仅覆盖已存储证据，不覆盖未知来源行、导出覆盖、身份认证、属性归属、报告筛选或未观察变化。质量在内存中使用完整历史，可能汇总大量证据，不单独分页观察；适用于开发规模数据。已有上传与资源限制保持不变。观察重新计算，没有审计日志或持久化分析版本。测试使用合成数据；私人导出保留在 Git 之外。
 
-Phase 4 includes no SEO opportunity generation, scores, prioritization, actions, Decision Engine, AI, integrations, scheduling, autonomous execution, or production deployment. Phase 5 has not started.
-第四阶段不包含 SEO 机会生成、评分、优先级、行动、决策引擎、AI、集成、调度、自主执行或生产部署。第五阶段尚未开始。
+Phase 5 includes no SEO opportunity generation, scores, prioritization, actions, Decision Engine, AI, integrations, scheduling, autonomous execution, or production deployment. Phase 6 has not started.
+第五阶段不包含 SEO 机会生成、评分、优先级、行动、决策引擎、AI、集成、调度、自主执行或生产部署。第六阶段尚未开始。

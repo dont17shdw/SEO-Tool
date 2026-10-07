@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.analysis.current_provenance import RecordedMetricSource, analyse_current_provenance
 from app.analysis.data_quality import ImportEvidence, analyse_import_quality, analyse_page_quality
 from app.analysis.performance_comparison import (
     ComparisonOutcome,
@@ -18,6 +19,7 @@ from app.api.v1.schemas import (
     ImportRunList,
     ImportRunResponse,
     PagePerformanceHistory,
+    PageProvenanceResponse,
     PageQualityCounts,
     PageQualityResponse,
     PerformanceComparisonResponse,
@@ -26,7 +28,7 @@ from app.api.v1.schemas import (
     WebsitePageResponse,
 )
 from app.db.session import get_session
-from app.models import ImportRun, PagePerformanceSnapshot, WebsitePage
+from app.models import ImportRun, PageMetricProvenance, PagePerformanceSnapshot, WebsitePage
 
 router = APIRouter(tags=["performance history"])
 
@@ -37,6 +39,7 @@ class LoadedPageHistory:
     records: list[tuple[PagePerformanceSnapshot, ImportRun]]
     comparison: ComparisonOutcome
     quality: PageQualityResponse
+    provenance: PageProvenanceResponse | None
 
 
 def _database_unavailable() -> HTTPException:
@@ -49,7 +52,9 @@ def _database_unavailable() -> HTTPException:
     )
 
 
-def _load_page_history(session: Session, page_id: UUID) -> LoadedPageHistory:
+def _load_page_history(
+    session: Session, page_id: UUID, *, include_provenance: bool = False
+) -> LoadedPageHistory:
     """Load page evidence once and reuse one comparison for history and quality.
     一次读取页面证据，为历史与质量复用一次比较结果。
     """
@@ -67,6 +72,13 @@ def _load_page_history(session: Session, page_id: UUID) -> LoadedPageHistory:
             .order_by(ImportRun.imported_at, PagePerformanceSnapshot.id)
         )
         records = [(snapshot, run) for snapshot, run in session.execute(statement)]
+        sources = (
+            session.scalars(
+                select(PageMetricProvenance).where(PageMetricProvenance.page_id == page_id)
+            ).all()
+            if include_provenance
+            else []
+        )
     except SQLAlchemyError:
         raise _database_unavailable() from None
     observations = [
@@ -101,7 +113,25 @@ def _load_page_history(session: Session, page_id: UUID) -> LoadedPageHistory:
         selected_snapshot_ids=analysed.selected_snapshot_ids,
         readiness_reasons=analysed.readiness_reasons,
     )
-    return LoadedPageHistory(website_page, records, outcome, quality)
+    provenance = None
+    if include_provenance:
+        analysed_provenance = analyse_current_provenance(
+            page_id=page_id,
+            current_values={
+                "clicks_28d": website_page.clicks_28d,
+                "impressions_28d": website_page.impressions_28d,
+                "ctr": website_page.ctr,
+                "average_position": website_page.average_position,
+            },
+            observations=observations,
+            snapshot_import_ids={snapshot.id: run.id for snapshot, run in records},
+            recorded_sources=[
+                RecordedMetricSource(item.page_id, item.metric_name, item.snapshot_id)
+                for item in sources
+            ],
+        )
+        provenance = PageProvenanceResponse.model_validate(analysed_provenance)
+    return LoadedPageHistory(website_page, records, outcome, quality, provenance)
 
 
 @router.get(
@@ -153,7 +183,7 @@ def page_performance(
     Comparison uses all page history, independently of the displayed snapshot page.
     比较使用全部页面历史记录，不依赖当前展示的快照页。
     """
-    loaded = _load_page_history(session, page_id)
+    loaded = _load_page_history(session, page_id, include_provenance=True)
     records = loaded.records
     outcome = loaded.comparison
     offset = (page - 1) * page_size
@@ -192,6 +222,7 @@ def page_performance(
         ),
         comparison_unavailable_reason=outcome.unavailable_reason,
         quality=loaded.quality,
+        provenance=loaded.provenance,
     )
 
 
@@ -207,6 +238,22 @@ def page_quality(
     返回与页面性能响应内嵌结果一致的完整历史质量摘要。
     """
     return _load_page_history(session, page_id).quality
+
+
+@router.get(
+    "/pages/{page_id}/provenance",
+    response_model=PageProvenanceResponse,
+    summary="Read recorded current-metric sources / 读取已记录的当前指标来源",
+)
+def page_provenance(
+    page_id: UUID, session: Annotated[Session, Depends(get_session)]
+) -> PageProvenanceResponse:
+    """Return proven current metric sources, separate from comparison readiness.
+    返回已证明的当前指标来源，与对比就绪度相互独立。
+    """
+    loaded = _load_page_history(session, page_id, include_provenance=True)
+    assert loaded.provenance is not None
+    return loaded.provenance
 
 
 @router.get(

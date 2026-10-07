@@ -1,14 +1,15 @@
 from dataclasses import dataclass
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.imports.gsc.schemas import ParsedImport
-from app.models import ImportRun, PagePerformanceSnapshot, WebsitePage
+from app.models import ImportRun, PageMetricProvenance, PagePerformanceSnapshot, WebsitePage
 
 GSC_FIELDS = ("clicks_28d", "impressions_28d", "ctr", "average_position")
+PROVENANCE_BATCH_SIZE = 1000
 
 
 @dataclass
@@ -22,8 +23,8 @@ class ImportCounts:
 
 
 def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
-    """Atomically commit current metrics, completed import history, and source snapshots.
-    原子提交当前指标、已完成的导入历史及来源快照。
+    """Atomically commit current metrics, history, snapshots, and explicit metric sources.
+    原子提交当前指标、历史、快照及明确的指标来源。
 
     A unique fingerprint reservation serializes identical imports before any page writes.
     唯一指纹预留会在写入任何页面之前串行化相同文件的导入。
@@ -71,6 +72,7 @@ def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
 
         result = ImportCounts(import_run_id=run_id)
         snapshots: list[PagePerformanceSnapshot] = []
+        provenance_rows: list[dict[str, UUID | str]] = []
         # Consistent URL ordering reduces deadlocks between overlapping imports.
         # 一致的 URL 排序减少导入内容重叠时发生死锁的可能。
         for row in sorted(parsed.rows, key=lambda item: item.url):
@@ -104,20 +106,41 @@ def persist_gsc_pages(session: Session, parsed: ParsedImport) -> ImportCounts:
 
             # History stores supplied observations, never values retained from older uploads.
             # 历史记录仅保存本次提供的观测值，不使用旧上传中保留的值。
-            snapshots.append(
-                PagePerformanceSnapshot(
-                    import_run_id=run_id,
-                    page_id=page_id,
-                    url=row.url,
-                    clicks=row.clicks_28d,
-                    impressions=row.impressions_28d,
-                    ctr=row.ctr,
-                    average_position=row.average_position,
-                    period_start=preview.period_start,
-                    period_end=preview.period_end,
-                )
+            snapshot = PagePerformanceSnapshot(
+                id=uuid4(),
+                import_run_id=run_id,
+                page_id=page_id,
+                url=row.url,
+                clicks=row.clicks_28d,
+                impressions=row.impressions_28d,
+                ctr=row.ctr,
+                average_position=row.average_position,
+                period_start=preview.period_start,
+                period_end=preview.period_end,
+            )
+            snapshots.append(snapshot)
+            # Explicit observations refresh their source even when the current value is unchanged.
+            # 明确提供的观测值即使与当前值相同，也会刷新其来源。
+            provenance_rows.extend(
+                {"page_id": page_id, "metric_name": field, "snapshot_id": snapshot.id}
+                for field in supplied
             )
         session.add_all(snapshots)
+        # Referenced snapshots must exist before links; page locks last until the same commit.
+        # 创建关联之前，被引用的快照必须已存在；页面锁持续到同一次提交完成。
+        session.flush()
+        # Bound parameters per statement even for an accepted 10,000-row upload.
+        # 即使上传包含允许的 10,000 行，也限制每条语句的参数数量。
+        for offset in range(0, len(provenance_rows), PROVENANCE_BATCH_SIZE):
+            provenance_insert = insert(PageMetricProvenance).values(
+                provenance_rows[offset : offset + PROVENANCE_BATCH_SIZE]
+            )
+            session.execute(
+                provenance_insert.on_conflict_do_update(
+                    index_elements=[PageMetricProvenance.page_id, PageMetricProvenance.metric_name],
+                    set_={"snapshot_id": provenance_insert.excluded.snapshot_id},
+                )
+            )
         session.execute(
             update(ImportRun)
             .where(ImportRun.id == run_id)

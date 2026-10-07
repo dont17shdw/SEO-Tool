@@ -156,6 +156,32 @@ class ImportQualityResponse(BaseModel):
     counts: dict[str, int]
 
 
+class MetricProvenanceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    metric_name: Literal["clicks_28d", "impressions_28d", "ctr", "average_position"]
+    current_value: int | Decimal | None
+    status: Literal["known", "unknown", "unavailable"]
+    snapshot_id: UUID | None
+    import_run_id: UUID | None
+    period_start: date | None
+    period_end: date | None
+    imported_at: datetime | None
+
+
+class PageProvenanceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    page_id: UUID
+    metrics: list[MetricProvenanceResponse]
+    known_provenance_count: int
+    unknown_provenance_count: int
+    unavailable_metric_count: int
+    all_known_metrics_share_one_snapshot: bool | None
+    distinct_snapshot_ids: list[UUID]
+    observations: list[QualityObservationResponse]
+
+
 class PagePerformanceHistory(BaseModel):
     current_page: WebsitePageResponse
     items: list[PerformanceSnapshotResponse]
@@ -166,3 +192,4 @@ class PagePerformanceHistory(BaseModel):
     comparison: PerformanceComparisonResponse | None
     comparison_unavailable_reason: str | None
     quality: PageQualityResponse
+    provenance: PageProvenanceResponse
