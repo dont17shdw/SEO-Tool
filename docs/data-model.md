@@ -2,9 +2,9 @@
 
 ## Purpose / 目的
 
-Phase 1 defines two PostgreSQL tables: `website_pages` stores a page and its latest known SEO metrics; `seo_opportunities` stores potential actions related to that page. These are persistence contracts only. No ingestion, SEO rule, scoring algorithm, or recommendation process is implemented yet.
+Phase 1 defines two PostgreSQL tables: `website_pages` stores a page and its latest known SEO metrics; `seo_opportunities` stores potential actions related to that page. Phase 2 imports GSC page metrics into `website_pages` without changing the schema. SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
 
-第一阶段定义两个 PostgreSQL 表：`website_pages` 存储页面及其最新已知 SEO 指标；`seo_opportunities` 存储与该页面相关的潜在行动。这些仅是持久化契约，尚未实现数据导入、SEO 规则、评分算法或建议流程。
+第一阶段定义两个 PostgreSQL 表：`website_pages` 存储页面及其最新已知 SEO 指标；`seo_opportunities` 存储与该页面相关的潜在行动。第二阶段将 GSC 网页指标导入 `website_pages`，不改变数据库结构。SEO 规则、评分、机会生成及建议仍未实现。
 
 SQLAlchemy models define the schema and Alembic creates it through an explicit migration. Model changes require a corresponding migration. FastAPI startup and the health endpoint do not create tables or check database connectivity.
 
@@ -14,8 +14,8 @@ SQLAlchemy 模型定义数据库结构，Alembic 通过显式迁移创建结构�
 
 - **IDs:** PostgreSQL `UUID` primary keys use an application-side `uuid4` default. No PostgreSQL UUID extension is required. Direct SQL inserts must supply IDs.
 - **标识符：** PostgreSQL `UUID` 主键使用应用侧 `uuid4` 默认值，无需 PostgreSQL UUID 扩展。直接通过 SQL 插入时必须提供 ID。
-- **Unknown values:** Nullable metrics use `NULL` for unknown or unobserved values. Zero means a measured zero. Do not convert missing metrics to zero during future imports.
-- **未知值：** 可空指标以 `NULL` 表示未知或尚未观察的值。零表示已测量且结果为零。未来导入时不得将缺失指标转换为零。
+- **Unknown values:** Nullable metrics use `NULL` for unknown or unobserved values. Zero means a measured zero. Imports must not convert missing metrics to zero.
+- **未知值：** 可空指标以 `NULL` 表示未知或尚未观察的值。零表示已测量且结果为零。导入时不得将缺失指标转换为零。
 - **Numeric values:** SQLAlchemy uses decimal values for `Numeric` fields. Store CTR and confidence as fractions from `0` to `1`; for example, `0.025` means 2.5%.
 - **数值：** SQLAlchemy 为 `Numeric` 字段使用十进制值。点击率与置信度以 `0` 至 `1` 的比例存储；例如，`0.025` 表示 2.5%。
 - **Time:** PostgreSQL `TIMESTAMP WITH TIME ZONE` represents instants. Application code and documentation use UTC; display and input/output offsets must be handled explicitly by future APIs.
@@ -25,9 +25,9 @@ SQLAlchemy 模型定义数据库结构，Alembic 通过显式迁移创建结构�
 
 ## WebsitePage / 网站页面
 
-The `WebsitePage` model maps to `website_pages`. One row represents one unique stored URL. The URL uniqueness constraint uses the stored string; equivalent URLs differing by case, fragments, or other formatting can remain distinct. URL normalization belongs to the future normalization layer.
+The `WebsitePage` model maps to `website_pages`. One row represents one unique stored URL. The URL uniqueness constraint uses the stored string; equivalent URLs differing by case, fragments, or other formatting can remain distinct. Phase 2 validates absolute HTTP(S) URLs and trims surrounding whitespace only. Broader canonicalization remains a future concern.
 
-`WebsitePage` 模型对应 `website_pages` 表。一条记录表示一个唯一的已存储 URL。URL 唯一性约束使用实际存储的字符串；大小写、片段或其他格式不同的等价 URL 仍可能被视为不同值。URL 标准化属于未来标准化层的职责。
+`WebsitePage` 模型对应 `website_pages` 表。一条记录表示一个唯一的已存储 URL。URL 唯一性约束使用实际存储的字符串；大小写、片段或其他格式不同的等价 URL 仍可能被视为不同值。第二阶段仅校验绝对 HTTP(S) URL 并去除前后空白。更广泛的规范化仍属于未来职责。
 
 | Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning and constraints / 含义与约束 |
 | --- | --- | --- | --- |
@@ -65,9 +65,9 @@ The six click/impression fields, word count, link counts, and backlinks have non
 
 ## SEOOpportunity / SEO 机会
 
-The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 1 has no writer API, opportunity generator, or scoring implementation.
+The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 2 has no opportunity writer API, opportunity generator, or scoring implementation.
 
-`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第一阶段没有写入 API、机会生成器或评分实现。
+`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第二阶段没有机会写入 API、机会生成器或评分实现。
 
 | Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning and constraints / 含义与约束 |
 | --- | --- | --- | --- |
@@ -98,19 +98,34 @@ website_pages.id (UUID)
       一个页面 → 零个或多个机会
 ```
 
-The foreign key uses `ON DELETE RESTRICT`. Deleting a page with existing opportunities is rejected by PostgreSQL. The ORM relationship does not automatically delete child opportunities or set their foreign keys to `NULL`; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 1 provides no deletion API.
+The foreign key uses `ON DELETE RESTRICT`. Deleting a page with existing opportunities is rejected by PostgreSQL. The ORM relationship does not automatically delete child opportunities or set their foreign keys to `NULL`; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 2 provides no deletion API.
 
-外键采用 `ON DELETE RESTRICT`。PostgreSQL 会拒绝删除仍有关联机会的页面。ORM 关联不会自动删除子机会，也不会将其外键设为 `NULL`；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第一阶段不提供删除 API。
+外键采用 `ON DELETE RESTRICT`。PostgreSQL 会拒绝删除仍有关联机会的页面。ORM 关联不会自动删除子机会，也不会将其外键设为 `NULL`；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第二阶段不提供删除 API。
 
 PostgreSQL automatically indexes both primary keys and the unique `website_pages.url` constraint. Explicit indexes on `seo_opportunities.page_id` and `seo_opportunities.status` support future per-page and status-filtered queries. No speculative analytics indexes are added.
 
 PostgreSQL 自动为两个主键及 `website_pages.url` 唯一性约束创建索引。`seo_opportunities.page_id` 和 `seo_opportunities.status` 的显式索引支持未来按页面及状态筛选的查询。当前不添加预测性的分析索引。
 
+## Phase 2 write boundary / 第二阶段写入边界
+
+| GSC value / GSC 值 | Model field / 模型字段 | Stored representation / 存储形式 |
+| --- | --- | --- |
+| Clicks / 点击次数 | `clicks_28d` | Non-negative integer; missing is unknown.<br>非负整数；缺失表示未知。 |
+| Impressions / 展示 | `impressions_28d` | Non-negative integer; missing is unknown.<br>非负整数；缺失表示未知。 |
+| CTR / 点击率 | `ctr` | Fraction in `[0, 1]`, up to six decimal places.<br>`[0, 1]` 比例，最多六位小数。 |
+| Position / 排名 | `average_position` | Non-negative decimal, up to four decimal places.<br>非负十进制数，最多四位小数。 |
+
+Confirmed imports upsert by the exact trimmed URL within a transaction. A new row receives only the URL and supplied GSC values; unspecified nullable fields stay `NULL`. An existing row updates only supplied, non-blank GSC values. A blank incoming metric does not erase an existing value; an explicit measured zero does update it. An unchanged existing row counts as skipped. Unexpected persistence failures roll back the entire operation.
+已确认导入在事务内按去除前后空白后的精确 URL 执行新增或更新。新行仅接收 URL 及提供的 GSC 值；未指定的可空字段保持 `NULL`。已有行仅更新已提供、非空白的 GSC 值。传入空白指标不会清除已有值；明确测得的零会更新该值。未变化的已有行计为跳过。意外持久化失败会回滚整个操作。
+
+The import never populates the seven-day or previous-28-day fields, infers page type or keywords, or changes business value, backlinks, indexing, word count, content timestamps, titles, or opportunity records. Row creation/modification timestamps retain their normal model behavior. The import contract and numeric validation are in [gsc-import.md](gsc-import.md).
+导入不会填充七天或前 28 天字段，不会推导页面类型或关键词，也不会修改业务价值、外链、索引、字词数、内容时间戳、标题或机会记录。行创建与修改时间戳保留模型的正常行为。导入契约及数值校验详见 [gsc-import.md](gsc-import.md)。
+
 ## Deliberate limits / 当前限制
 
-The page model stores one latest set of metrics; it is not a time-series snapshot table. The 7-day and 28-day fields do not store an observation-date anchor, source, or refresh history. Phase 2 must document a consistent reporting window for its single import format before populating these fields. Add provenance or dated snapshots only when an implemented feature requires them.
+The page model stores one latest set of metrics; it is not a time-series snapshot table. The 7-day and 28-day fields do not store an observation-date anchor, source, or refresh history. Phase 2 treats GSC page imports as the latest 28 days; CSV and workbooks without date filters require the user to select that window before export. Successive imports may combine previously supplied values with newly supplied ones, so this is not a historical reporting or trend-comparison system. Add provenance or dated snapshots only when an implemented feature requires them.
 
-页面模型仅存储一组最新指标，并非时间序列快照表。7 天与 28 天字段不存储观察日期基准、数据来源或刷新历史。第二阶段在写入这些字段前，必须为其单一导入格式记录一致的报告时间窗口。只有已实现的功能确实需要时，才增加来源追踪或带日期的快照。
+页面模型仅存储一组最新指标，并非时间序列快照表。7 天与 28 天字段不存储观察日期基准、数据来源或刷新历史。第二阶段将 GSC 网页导入视为最近 28 天；CSV 及没有日期筛选的工作簿要求用户在导出前选择该窗口。连续导入可能将此前提供的值与新提供的值组合，因此这不是历史报告或趋势对比系统。只有已实现的功能确实需要时，才增加来源追踪或带日期的快照。
 
 The foundation has no multi-site ownership model, user authentication, full-text search, audit trail, recommendation versions, scoring formula, or SEO rule taxonomy. These remain separate design decisions for later phases rather than implicit promises of this schema.
 
