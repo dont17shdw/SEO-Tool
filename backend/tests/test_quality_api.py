@@ -362,4 +362,4 @@ def test_performance_reuses_one_history_query_and_one_comparison(
         event.remove(gsc_engine, "before_cursor_execute", record_statement)
     assert response.status_code == 200
     assert comparisons == 1
-    assert len(statements) == 2
+    assert len(statements) == 3

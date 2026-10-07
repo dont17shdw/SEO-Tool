@@ -2,9 +2,9 @@
 
 ## Purpose / 目的
 
-PostgreSQL stores four tables. `website_pages` holds the latest applied page state; `seo_opportunities` remains a future action contract. Phase 3 added `import_runs` and `page_performance_snapshots`. Phase 4 computes quality observations and readiness from these existing records without persisting them or changing the schema. SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
+PostgreSQL stores five tables. `website_pages` holds current applied state; `seo_opportunities` remains a future action contract; `import_runs` and `page_performance_snapshots` retain import observations. Phase 5 adds `page_metric_provenance` for four current metric-to-snapshot links. Comparison, quality, and provenance observations are runtime responses rather than persisted judgments. SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
 
-PostgreSQL 存储四个表。`website_pages` 保存最近应用的页面状态；`seo_opportunities` 仍为未来行动契约。第三阶段增加 `import_runs` 与 `page_performance_snapshots`。第四阶段根据这些已有记录计算质量观察与就绪度，不持久化它们，也不改变数据库结构。SEO 规则、评分、机会生成及建议仍未实现。
+PostgreSQL 存储五个表。`website_pages` 保存当前应用状态；`seo_opportunities` 仍为未来行动契约；`import_runs` 与 `page_performance_snapshots` 保留导入观察。第五阶段增加 `page_metric_provenance`，保存四个当前指标与快照的关联。对比、质量及来源观察是运行时响应，不是持久化判断。SEO 规则、评分、机会生成及建议仍未实现。
 
 SQLAlchemy models define the schema and Alembic creates it through an explicit migration. Model changes require a corresponding migration. FastAPI startup and the health endpoint do not create tables or check database connectivity.
 
@@ -12,8 +12,8 @@ SQLAlchemy 模型定义数据库结构，Alembic 通过显式迁移创建结构�
 
 ## Shared conventions / 共同约定
 
-- **IDs:** PostgreSQL `UUID` primary keys use an application-side `uuid4` default. No PostgreSQL UUID extension is required. Direct SQL inserts must supply IDs.
-- **标识符：** PostgreSQL `UUID` 主键使用应用侧 `uuid4` 默认值，无需 PostgreSQL UUID 扩展。直接通过 SQL 插入时必须提供 ID。
+- **IDs:** Entity `id` columns use PostgreSQL `UUID` with an application-side `uuid4` default. Provenance instead keys existing page IDs with metric names. No PostgreSQL UUID extension is required. Direct SQL inserts must supply IDs.
+- **标识符：** 实体 `id` 字段使用 PostgreSQL `UUID` 与应用侧 `uuid4` 默认值。来源表则使用已有页面 ID 与指标名称作为键。无需 PostgreSQL UUID 扩展。直接通过 SQL 插入时必须提供 ID。
 - **Unknown values:** Nullable metrics use `NULL` for unknown or unobserved values. Zero means a measured zero. Imports must not convert missing metrics to zero.
 - **未知值：** 可空指标以 `NULL` 表示未知或尚未观察的值。零表示已测量且结果为零。导入时不得将缺失指标转换为零。
 - **Numeric values:** SQLAlchemy uses decimal values for `Numeric` fields. Store CTR and confidence as fractions from `0` to `1`; for example, `0.025` means 2.5%.
@@ -37,10 +37,10 @@ The `WebsitePage` model maps to `website_pages`. One row represents one unique s
 | `title` | `TEXT` | Yes / 是 | Last known page title.<br>最新已知的页面标题。 |
 | `primary_keyword` | `TEXT` | Yes / 是 | Optional primary target keyword.<br>可选的主要目标关键词。 |
 | `clicks_7d` | `BIGINT` | Yes / 是 | Clicks over the latest 7-day window; ≥ 0.<br>最近 7 天窗口的点击数；≥ 0。 |
-| `clicks_28d` | `BIGINT` | Yes / 是 | Clicks over the latest 28-day window; ≥ 0.<br>最近 28 天窗口的点击数；≥ 0。 |
+| `clicks_28d` | `BIGINT` | Yes / 是 | Latest applied clicks from a supplied 28-day report; ≥ 0. Its period may be older.<br>已提供 28 天报告最近应用的点击数；≥ 0。其时间段可能较早。 |
 | `clicks_previous_28d` | `BIGINT` | Yes / 是 | Clicks over the preceding 28-day comparison window; ≥ 0.<br>此前 28 天对比窗口的点击数；≥ 0。 |
 | `impressions_7d` | `BIGINT` | Yes / 是 | Impressions over the latest 7-day window; ≥ 0.<br>最近 7 天窗口的展示数；≥ 0。 |
-| `impressions_28d` | `BIGINT` | Yes / 是 | Impressions over the latest 28-day window; ≥ 0.<br>最近 28 天窗口的展示数；≥ 0。 |
+| `impressions_28d` | `BIGINT` | Yes / 是 | Latest applied impressions from a supplied 28-day report; ≥ 0. Its period may be older.<br>已提供 28 天报告最近应用的展示数；≥ 0。其时间段可能较早。 |
 | `impressions_previous_28d` | `BIGINT` | Yes / 是 | Impressions over the preceding 28-day comparison window; ≥ 0.<br>此前 28 天对比窗口的展示数；≥ 0。 |
 | `ctr` | `NUMERIC(7,6)` | Yes / 是 | Click-through-rate fraction; 0 ≤ value ≤ 1.<br>点击率比例；0 ≤ 值 ≤ 1。 |
 | `average_position` | `NUMERIC(10,4)` | Yes / 是 | Reported average search position; ≥ 0.<br>数据源报告的平均搜索排名；≥ 0。 |
@@ -65,9 +65,9 @@ The six click/impression fields, word count, link counts, and backlinks have non
 
 ## SEOOpportunity / SEO 机会
 
-The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 4 has no opportunity writer API, opportunity generator, or scoring implementation. Quality requests create no opportunity records.
+The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. Phase 5 has no opportunity writer API, generator, or scoring implementation. Quality and provenance requests create no opportunity records.
 
-`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第四阶段没有机会写入 API、机会生成器或评分实现。质量请求不创建机会记录。
+`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。第五阶段没有机会写入 API、生成器或评分实现。质量及来源请求不创建机会记录。
 
 | Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning and constraints / 含义与约束 |
 | --- | --- | --- | --- |
@@ -131,19 +131,39 @@ The database validates SHA-256 shape, nonnegative counts, `created_count + updat
 `(import_run_id, page_id)` is unique, preventing duplicate page snapshots within a run. Date pairs must be both known or both unknown and ascend when known. A composite index on `(page_id, period_end, period_start)` supports page history and reporting-date queries. Source, source type, reporting window, and import time are read from the parent run rather than duplicated on snapshots. Snapshots contain no SEO judgment or score.
 `(import_run_id, page_id)` 唯一，防止同一次导入中的页面快照重复。日期对必须均已知或均未知，已知时按先后排序。`(page_id, period_end, period_start)` 复合索引支持页面历史与报告日期查询。来源、来源类型、报告窗口及导入时间从父导入记录读取，不在快照中重复。快照不包含 SEO 判断或评分。
 
+## PageMetricProvenance / 当前指标来源关联
+
+`PageMetricProvenance` maps to `page_metric_provenance`. One current row per page and metric points to the snapshot that explicitly supplied that metric. The snapshot already identifies its import and normalized value, so the link stores neither copied values nor import IDs. Historical snapshots remain unchanged when a current link moves.
+`PageMetricProvenance` 对应 `page_metric_provenance`。每个页面与指标的一条当前行，指向明确提供该指标的快照。快照已有导入及标准化值，因此关联不存储复制值或导入 ID。当前关联移动时，历史快照保持不变。
+
+| Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning / 含义 |
+| --- | --- | --- | --- |
+| `page_id` | `UUID` | No / 否 | Part of the primary key; foreign key to `website_pages.id`, `ON DELETE RESTRICT`.<br>主键组成部分；关联 `website_pages.id` 的外键，`ON DELETE RESTRICT`。 |
+| `metric_name` | `VARCHAR(30)` | No / 否 | Part of the primary key; limited to `clicks_28d`, `impressions_28d`, `ctr`, `average_position`.<br>主键组成部分；仅限 `clicks_28d`、`impressions_28d`、`ctr`、`average_position`。 |
+| `snapshot_id` | `UUID` | No / 否 | Indexed foreign key to `page_performance_snapshots.id`, `ON DELETE RESTRICT`.<br>带索引的外键，关联 `page_performance_snapshots.id`，`ON DELETE RESTRICT`。 |
+
+The composite primary key enforces at most one link per page/metric; a check constraint enforces the four names. There is no separate row ID, copied metric, copied import ID, or update timestamp. Simple foreign keys enforce that the page and snapshot exist, but not that they are the same page. The import writer constructs links from the exact page/snapshot row, and read analysis rejects cross-page, missing, `NULL`-metric, or mismatched links. Direct SQL can bypass that application-level association check; no composite foreign key or database audit layer is introduced.
+复合主键约束每个页面与指标至多一个关联；检查约束限定四个名称。没有独立行 ID、复制指标、复制导入 ID 或更新时间戳。简单外键约束页面与快照存在，但不约束它们属于同一页面。导入写入器根据准确的页面与快照行构建关联，读取分析拒绝跨页面、缺失、指标为 `NULL` 或值不匹配的关联。直接 SQL 可绕过该应用级关联检查；不引入复合外键或数据库审计层。
+
+Revision `0003_current_metric_provenance` creates this empty table and its index without changing any existing page, run, snapshot, or opportunity. No provenance is backfilled from equality or replayed history. Existing non-`NULL` current values initially have unknown provenance. Its downgrade removes only current links, preserving metric values and all historical records. Normal use requires upgrading to this head revision.
+修订 `0003_current_metric_provenance` 创建此空表及索引，不改变任何已有页面、导入、快照或机会。不根据相等值或重放历史回填来源。已有非 `NULL` 当前值最初具有未知来源。其降级仅移除当前关联，保留指标值及全部历史记录。正常使用需要升级至此最新修订。
+
 ## Relationships and indexes / 关联与索引
 
 ```text
 website_pages.id (UUID)
   ├── seo_opportunities.page_id (UUID, NOT NULL)
-  └── page_performance_snapshots.page_id (UUID, NOT NULL)
+  ├── page_performance_snapshots.page_id (UUID, NOT NULL)
+  └── page_metric_provenance.page_id (UUID, PRIMARY KEY part)
 import_runs.id (UUID)
   └── page_performance_snapshots.import_run_id (UUID, NOT NULL)
+page_performance_snapshots.id (UUID)
+  └── page_metric_provenance.snapshot_id (UUID, NOT NULL)
 ```
 
-Foreign keys use `ON DELETE RESTRICT`. PostgreSQL rejects deleting a page with opportunities or snapshots, or an import with snapshots. ORM relationships do not automatically delete children or clear required foreign keys; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 4 provides no deletion API.
+Foreign keys use `ON DELETE RESTRICT`. PostgreSQL rejects deleting referenced pages, imports, and snapshots, including provenance-linked snapshots. Existing history ORM relationships do not automatically delete children or clear required foreign keys; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 5 provides no deletion API.
 
-外键采用 `ON DELETE RESTRICT`。PostgreSQL 拒绝删除有机会或快照的页面，或有快照的导入。ORM 关联不会自动删除子项或清空必填外键；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第四阶段不提供删除 API。
+外键采用 `ON DELETE RESTRICT`。PostgreSQL 拒绝删除被引用的页面、导入及快照，包括来源关联的快照。已有历史 ORM 关联不会自动删除子项或清空必填外键；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第五阶段不提供删除 API。
 
 PostgreSQL automatically indexes primary keys and uniqueness constraints. Existing indexes on `seo_opportunities.page_id` and `seo_opportunities.status` remain. The new history indexes serve implemented read APIs and comparisons, without speculative SEO analytics indexes.
 
@@ -164,19 +184,19 @@ Confirmed imports upsert by the exact trimmed URL within a transaction. A new ro
 The import never populates the seven-day or previous-28-day fields, infers page type or keywords, or changes business value, backlinks, indexing, word count, content timestamps, titles, or opportunity records. Row creation/modification timestamps retain their normal model behavior. The import contract and numeric validation are in [gsc-import.md](gsc-import.md).
 导入不会填充七天或前 28 天字段，不会推导页面类型或关键词，也不会修改业务价值、外链、索引、字词数、内容时间戳、标题或机会记录。行创建与修改时间戳保留模型的正常行为。导入契约及数值校验详见 [gsc-import.md](gsc-import.md)。
 
-Phase 3 writes current pages, one completed run, and all snapshots atomically. Failure in any of these writes rolls back all of them; no failed run is retained. An already-successful identical hash returns the original run without writes. Snapshot `clicks`/`impressions` correspond to current-page `clicks_28d`/`impressions_28d`, but use only this file's observations. Comparison never writes calculated changes into the current page or `*_previous_28d` fields.
-第三阶段原子写入当前页面、一个已完成导入及全部快照。任何写入失败都会回滚所有写入；不保留失败导入。已成功的相同哈希返回原导入，不执行写入。快照 `clicks` 与 `impressions` 对应当前页面的 `clicks_28d` 与 `impressions_28d`，但仅使用本文件的观察。对比绝不将计算出的变化写入当前页面或 `*_previous_28d` 字段。
+Phase 5 atomically writes current pages, one completed run, all snapshots, and current provenance links. Any failure rolls back all four targets. Every supplied non-`NULL` metric refreshes its link, including zero and an unchanged numeric value. Blanks preserve the current value and existing link; unknown legacy links remain absent. An already-successful identical hash returns the original run with no writes. Current-page outcome counts and `updated_at` behavior remain based on metric changes, so a same-value page can count as skipped while its provenance refreshes. Comparison writes neither current metrics nor `*_previous_28d` fields.
+第五阶段原子写入当前页面、一个已完成导入、全部快照及当前来源关联。任何失败回滚全部四个目标。每个提供的非 `NULL` 指标刷新关联，包括零及未变化的数值。空白保留当前值及已有关联；未知旧关联保持缺失。已成功的相同哈希返回原导入，不执行写入。当前页面处理统计及 `updated_at` 行为仍根据指标变化，因此相同值页面可计为跳过，同时刷新来源。对比不写入当前指标或 `*_previous_28d` 字段。
 
-Revision `0002_import_history` creates the new tables, checks, foreign keys, and indexes without altering existing page/opportunity data. Earlier imports are not backfilled because their source bytes, dates, and provenance cannot be reconstructed reliably. Downgrading this revision removes only the new history tables and their contents; current-page data remains. Normal use requires upgrading to head.
-修订 `0002_import_history` 创建新表、检查、外键与索引，不改变已有页面及机会数据。不回填此前导入，因为其来源字节、日期与来源追踪无法可靠重建。降级此修订仅移除新历史表及其内容；当前页面数据保留。正常使用需要升级至最新修订。
+Revision `0002_import_history` created history without altering existing page/opportunity data or fabricating earlier imports. Its own downgrade removes history tables; the dependent provenance revision must be downgraded first. Phase 5 head `0003_current_metric_provenance` preserves the existing history unchanged and adds no backfill.
+修订 `0002_import_history` 创建历史，不改变已有页面及机会数据，也不编造此前导入。其自身降级移除历史表；须先降级依赖它的来源修订。第五阶段最新修订 `0003_current_metric_provenance` 保持已有历史不变，不增加回填。
 
 ## Runtime quality contract / 运行时质量契约
 
-Phase 4 requires no migration; `0002_import_history` remains head. `analysis/data_quality.py` produces structured observations, counts, and page readiness from existing snapshots/imports and the selected Phase 3 comparison. These are response contracts, not database models. Quality requests do not mutate current metrics, history, or opportunities and do not backfill missing observations.
-第四阶段无需迁移；`0002_import_history` 仍为最新修订。`analysis/data_quality.py` 根据已有快照与导入及第三阶段选中的对比，生成结构化观察、计数及页面就绪度。这些是响应契约，不是数据库模型。质量请求不修改当前指标、历史或机会，也不回填缺失观察。
+`analysis/data_quality.py` continues to produce structured observations, counts, and page readiness from historical snapshots/imports and the Phase 3 comparison. `analysis/current_provenance.py` separately validates recorded current links and reports current provenance. Both return runtime contracts rather than persisted observations. Quality and provenance requests perform no writes; current provenance does not alter comparison readiness.
+`analysis/data_quality.py` 继续根据历史快照与导入及第三阶段对比，生成结构化观察、计数与页面就绪度。`analysis/current_provenance.py` 单独校验已记录当前关联并报告当前来源。两者均返回运行时契约，不持久化观察。质量及来源请求不执行写入；当前来源不改变对比就绪度。
 
-Snapshot IDs and run IDs support factual evidence about dates, missing metrics, repeated date bounds, overlap, and strict import chronology. However, the schema has no per-metric source ID on `WebsitePage`, may lack pre-Phase-3 history, and cannot track manual/direct SQL edits. Matching current values to a snapshot does not prove their origin. Therefore `current_state_not_single_snapshot` is not emitted.
-快照 ID 与导入 ID 支持关于日期、缺失指标、重复日期范围、重叠及严格导入时间顺序的事实证据。但是，数据库结构没有 `WebsitePage` 的逐指标来源 ID，可能缺少第三阶段之前的历史，也无法追踪手动或直接 SQL 编辑。当前值与快照匹配不能证明其来源。因此不生成 `current_state_not_single_snapshot`。
+Current provenance is known only when a recorded link resolves to the same page's snapshot and import, its source metric is non-`NULL`, and that metric matches the current value. Missing or inconsistent links produce unknown provenance for a non-`NULL` current metric; current `NULL` means unavailable. Equality validates a stored link but never finds a missing origin. Multiple validated known snapshot IDs can now prove `current_state_not_single_snapshot`, emitted separately from quality readiness. Manual edits that leave the same value can remain undetectable because this is a controlled-write provenance contract, not an audit system.
+仅当已记录关联解析到同一页面的快照及导入、来源指标非 `NULL` 且与当前值匹配时，当前来源才为已知。缺失或不一致关联使非 `NULL` 当前指标来源未知；当前 `NULL` 表示不可用。相等性校验存储关联，但绝不寻找缺失来源。多个已验证已知快照 ID 现可证明 `current_state_not_single_snapshot`，与质量就绪度分开生成。保持相同值的手动编辑可能仍无法检测，因为这是受控写入来源契约，不是审计系统。
 
 Import grouping by source/type/window and dates does not establish the same GSC property or identical filter scope. Page observations are scoped by actual `page_id`, but neither import nor page readiness proves export completeness, source accuracy, full 28-day coverage, or matching report filters. See [data-quality.md](data-quality.md) for the exact deterministic rules and their evidence boundaries.
 按来源、类型、窗口与日期将导入分组，不能证明同一 GSC 属性或相同筛选范围。页面观察按实际 `page_id` 限定，但导入或页面就绪度都不能证明导出完整性、来源准确性、完整 28 天覆盖或报告筛选一致。明确的确定性规则及证据边界详见 [data-quality.md](data-quality.md)。

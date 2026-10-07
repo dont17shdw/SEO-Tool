@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { HistoryControls, HistoryPagination } from "@/components/history-pagination";
 import { PageMetricsTable } from "@/components/page-metrics-table";
 import { PageDataQuality } from "@/components/page-data-quality";
+import { PageMetricProvenance } from "@/components/page-metric-provenance";
 import { formatMetric } from "@/lib/gsc-api";
 import { formatChange, formatImportTime, formatPeriod, getPagePerformance, type PerformanceComparison } from "@/lib/history-api";
 import { usePaginatedResource } from "@/lib/use-paginated-resource";
@@ -56,10 +57,12 @@ export function PagePerformance({ pageId }: { pageId: string }) {
       {!loading && !error && data && (
         <>
           <section className="card" aria-labelledby="current-heading">
-            <h2 id="current-heading">Current stored 28-day metrics / 当前已保存的 28 天指标</h2>
-            <p>Latest successfully supplied values, following import order. Blank metrics preserve earlier values. This row may combine imports and is not a dated snapshot. 按导入顺序显示最新成功提供的值。空白指标保留此前值。此行可能组合多个导入，并非带日期的快照。</p>
+            <h2 id="current-heading">Current applied metrics / 当前已应用指标</h2>
+            <p>Latest successfully applied nonblank values from 28-day GSC imports, following import order. Blank metrics preserve earlier values. These are current applied values, not necessarily values from the newest reporting period. 按导入顺序显示 28 天 GSC 导入最近成功应用的非空白值。空白指标保留此前值。这是当前已应用的值，不一定来自最新报告时间段。</p>
             <PageMetricsTable rows={[data.current_page]} />
           </section>
+
+          <PageMetricProvenance provenance={data.provenance} />
 
           <PageDataQuality quality={data.quality} />
 

@@ -1,5 +1,6 @@
 import { isCount, isPageMetrics, isRecord, isReportingPeriod, requestJson, type PageMetrics } from "@/lib/gsc-api";
 import { isDataQuality, type DataQuality } from "@/lib/data-quality";
+import { isCurrentProvenance, type CurrentProvenance } from "@/lib/current-provenance";
 
 type ReportingPeriod = {
   reporting_window: "latest_28_days";
@@ -61,6 +62,7 @@ export type PagePerformanceResponse = PaginationMetadata & {
   comparison: PerformanceComparison | null;
   comparison_unavailable_reason: string | null;
   quality: DataQuality;
+  provenance: CurrentProvenance;
 };
 
 function isPagination(value: Record<string, unknown>, page: number, pageSize: number): boolean {
@@ -140,7 +142,7 @@ export async function getPagePerformance(pageId: string, page: number, pageSize:
     !isRecord(payload.current_page) || payload.current_page.id !== pageId || !isPageMetrics(payload.current_page) ||
     !Array.isArray(payload.items) || !payload.items.every(isSnapshot) || !isComparison(payload.comparison) ||
     !(payload.comparison_unavailable_reason === null || typeof payload.comparison_unavailable_reason === "string") ||
-    !isDataQuality(payload.quality, pageId)) {
+    !isDataQuality(payload.quality, pageId) || !isCurrentProvenance(payload.provenance, pageId, payload.current_page)) {
     throw new Error("Unexpected page performance response. 页面表现响应格式不符合预期。");
   }
   return payload as PagePerformanceResponse;
