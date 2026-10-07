@@ -3,10 +3,11 @@
 """
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field, model_validator
 
 
 class RowError(BaseModel):
@@ -28,6 +29,8 @@ class NormalizedGSCRow(BaseModel):
 class ImportPreview(BaseModel):
     source: Literal["gsc_pages"] = "gsc_pages"
     reporting_window: Literal["latest_28_days"] = "latest_28_days"
+    period_start: date | None = None
+    period_end: date | None = None
     detected_sheet: str | None
     total_rows: int
     valid_rows: int
@@ -39,6 +42,25 @@ class ImportPreview(BaseModel):
     can_apply: bool
     preview_hash: str
 
+    @model_validator(mode="after")
+    def validate_period_bounds(self) -> "ImportPreview":
+        """Keep reporting bounds paired and ordered; unknown dates must both remain NULL.
+        保持报告范围成对且有序；未知日期必须同时保持 NULL。
+        """
+        if (self.period_start is None) != (self.period_end is None):
+            raise ValueError("Reporting dates must both be present or both be unknown.")
+        if self.period_start is not None and self.period_end < self.period_start:
+            raise ValueError("The reporting period end cannot precede its start.")
+        return self
+
+    @computed_field
+    @property
+    def period_status(self) -> Literal["exact", "unknown"]:
+        """Expose whether source evidence supplies exact bounds, rather than inferred dates.
+        表示源证据是否提供精确范围，而非推测日期。
+        """
+        return "exact" if self.period_start is not None else "unknown"
+
 
 @dataclass(frozen=True)
 class ParsedImport:
@@ -48,3 +70,4 @@ class ParsedImport:
 
     preview: ImportPreview
     rows: list[NormalizedGSCRow]
+    filename: str

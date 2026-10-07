@@ -2,8 +2,8 @@
 
 ## Supported source / 支持的数据源
 
-Phase 2 accepts one source: the Google Search Console Pages performance export for the **latest 28 days**, uploaded manually as `.csv` or `.xlsx`. It does not import search queries, countries, devices, dates, search appearance, or indexing reports. English and Chinese localized page exports are supported.
-第二阶段接受一种数据源：Google Search Console **最近 28 天**网页性能导出，手动上传 `.csv` 或 `.xlsx`。不导入搜索查询、国家、设备、日期、搜索结果呈现或索引报告。支持英文与中文本地化的网页导出。
+The importer accepts one source: the Google Search Console Pages performance export for the **latest 28 days**, uploaded manually as `.csv` or `.xlsx`. It does not import search queries, countries, devices, search appearance, or indexing reports. English and Chinese localized page exports are supported. Date worksheets provide reporting-period metadata only; they do not become page records.
+导入器接受一种数据源：Google Search Console **最近 28 天**网页性能导出，手动上传 `.csv` 或 `.xlsx`。不导入搜索查询、国家、设备、搜索结果呈现或索引报告。支持英文与中文本地化的网页导出。日期工作表仅提供报告时间段元数据，不会成为页面记录。
 
 CSV must be UTF-8, with or without a BOM. Comma, semicolon, and tab delimiters are supported. The first nonblank row is the header. Blank rows are ignored; row-level errors retain the original source row numbers.
 CSV 必须使用 UTF-8，可包含或不包含 BOM。支持逗号、分号及制表符分隔。首个非空行为表头。空白行会被忽略；行级错误保留源文件中的原始行号。
@@ -13,6 +13,9 @@ XLSX 使用 `openpyxl` 只读模式。不计算公式单元格；指标公式会
 
 Recognized filter worksheets are `Filters`, `Filter`, and `过滤器`. Their `Date`, `Dates`, `Date range`, or `日期` entries must use a supported latest-28-day label: `Last 28 days`, `Past 28 days`, `28 days`, `过去 28 天`, or `最近 28 天` (case and spacing variations are accepted). A conflicting nonblank date label is rejected. If date metadata is absent or blank, including CSV, the documented latest-28-day assumption applies: the user must choose that date filter before export. Custom date ranges are not interpreted.
 识别的筛选工作表为 `Filters`、`Filter` 与 `过滤器`。其中 `Date`、`Dates`、`Date range` 或 `日期` 条目必须使用受支持的最近 28 天标签：`Last 28 days`、`Past 28 days`、`28 days`、`过去 28 天` 或 `最近 28 天`（允许大小写与空白差异）。冲突的非空日期标签会被拒绝。日期元数据缺失或为空时，包括 CSV，采用文档约定的最近 28 天假设：用户必须在导出前选择该日期筛选。不解释自定义日期范围。
+
+Phase 3 additionally examines recognized XLSX date worksheets (`Chart`, `Date`, `Dates`, `图表`, `日期`) for observed reporting dates. Earliest/latest valid dates become `period_start`/`period_end`. Absent, malformed, or conflicting date evidence leaves both `NULL` and marks `period_status="unknown"`; the valid Pages import may continue. Filenames and import dates are never used to invent reporting dates. CSV has no exact period evidence in this contract. See [performance-history.md](performance-history.md) for the precise extraction rules.
+第三阶段还检查已识别的 XLSX 日期工作表（`Chart`、`Date`、`Dates`、`图表`、`日期`）中的已观察报告日期。最早与最晚有效日期成为 `period_start` 与 `period_end`。日期证据缺失、损坏或冲突时，两者保持 `NULL` 并标记 `period_status="unknown"`；有效的网页导入仍可继续。绝不使用文件名或导入日期编造报告日期。此契约中的 CSV 没有准确时间段证据。明确的提取规则详见 [performance-history.md](performance-history.md)。
 
 ## Source column mapping / 来源列映射
 
@@ -67,25 +70,28 @@ Counts are mutually exclusive: `total_rows = valid_rows + invalid_rows + duplica
 
 1. Select a CSV/XLSX file at `/imports/gsc` and request preview.
    在 `/imports/gsc` 选择 CSV/XLSX 文件并请求预览。
-2. Inspect detected source, reporting window, XLSX sheet, counts, mapping, errors, and sample normalized rows. Preview does not use PostgreSQL or persist any records.
-   检查识别的数据源、报告窗口、XLSX 工作表、统计、映射、错误及标准化样本。预览不使用 PostgreSQL，也不持久化任何记录。
+2. Inspect detected source, reporting window, actual period dates/status, XLSX sheet, counts, mapping, errors, and sample normalized rows. Preview does not use PostgreSQL or persist any records.
+   检查识别的数据源、报告窗口、实际时间段日期与状态、XLSX 工作表、统计、映射、错误及标准化样本。预览不使用 PostgreSQL，也不持久化任何记录。
 3. Correct errors in the source file and preview again if necessary.
    必要时修正源文件错误并重新预览。
 4. Explicitly confirm import. The browser resubmits the selected file with `confirmed=true` and its preview hash. Changing the file invalidates the earlier preview.
    显式确认导入。浏览器再次提交选中的文件，并附带 `confirmed=true` 与预览哈希。更改文件会使此前预览失效。
-5. The backend reparses and revalidates the complete file, checks the SHA-256 fingerprint, and persists it transactionally. Then review the result and open `/pages`.
-   后端重新解析并校验完整文件，检查 SHA-256 指纹，并在事务中持久化。然后查看结果并打开 `/pages`。
+5. The backend reparses and revalidates the complete file, checks the SHA-256 fingerprint, and transactionally updates current pages, records a successful import, and creates snapshots. Already-processed file bytes return the original import ID without further writes. Review `/imports/history` or open a page's history from `/pages`.
+   后端重新解析并校验完整文件，检查 SHA-256 指纹，并在事务中更新当前页面、记录成功导入及创建快照。已处理的文件字节返回原导入 ID，不再次写入。从 `/imports/history` 查看历史，或从 `/pages` 打开页面历史。
 
-No server-side preview session is stored. Normalized client-side rows are never accepted as the persistence source. The fingerprint provides file consistency, not authentication or an audit record.
-不存储服务端预览会话。客户端标准化行不会被接受为持久化数据源。指纹用于保证文件一致性，不是身份认证或审计记录。
+No server-side preview session is stored. Normalized client-side rows are never accepted as the persistence source. The fingerprint provides file consistency and duplicate-import identity, not authentication. The successful import stores hash and filename metadata without retaining the source file bytes.
+不存储服务端预览会话。客户端标准化行不会被接受为持久化数据源。指纹用于保证文件一致性及重复导入标识，不是身份认证。成功导入存储哈希与文件名元数据，不保留源文件字节。
 
 ## Persistence / 持久化
 
 Upsert `WebsitePage` by exact trimmed URL. Create a missing page using only supplied GSC values; unspecified nullable fields stay `NULL`. For an existing page, update only nonblank supplied `clicks_28d`, `impressions_28d`, `ctr`, and `average_position`. Blank incoming metrics preserve stored values, while measured zeros overwrite them. Unchanged existing pages count as skipped. Non-GSC fields, other reporting periods, and opportunities are preserved.
 按去除前后空白后的精确 URL 新增或更新 `WebsitePage`。新页面仅使用已提供的 GSC 值；未指定的可空字段保持 `NULL`。已有页面仅更新已提供且非空白的 `clicks_28d`、`impressions_28d`、`ctr` 与 `average_position`。传入空白指标保留已存储值，测得的零则覆盖它们。未变化的已有页面计为跳过。非 GSC 字段、其他报告时间段与机会记录均保留。
 
-All validated rows are committed in one transaction. PostgreSQL URL uniqueness resolves concurrent insert conflicts; existing rows are locked while supplied metrics are updated. Unexpected database failures roll back all changes. There is no partial valid-row import, delete operation, or automatic recommendation.
-全部已校验行在一个事务内提交。PostgreSQL URL 唯一性处理并发插入冲突；更新已提供指标时会锁定已有行。意外数据库失败会回滚全部变更。没有仅导入有效行的部分导入、删除操作或自动建议。
+For a new file hash, one transaction commits current-page upserts, one `ImportRun` with `status="completed"`, and one `PagePerformanceSnapshot` for every validated row, including rows whose current page is unchanged. Each snapshot stores this upload's normalized metric values, including `NULL`; it never carries forward an omitted metric from the current page. PostgreSQL URL uniqueness resolves concurrent insert conflicts; existing rows are locked during updates. Any history, snapshot, or page persistence failure rolls back every change. Preview, invalid files, and failures create no import history. There is no partial import, delete operation, or automatic recommendation.
+对于新的文件哈希，一个事务提交当前页面新增与更新、一个 `status="completed"` 的 `ImportRun`，以及每个已校验行的一条 `PagePerformanceSnapshot`，包括当前页面未变化的行。每条快照存储本次上传的标准化指标值，包括 `NULL`；绝不从当前页面沿用未提供的指标。PostgreSQL URL 唯一性处理并发插入冲突；更新时锁定已有行。任何历史、快照或页面持久化失败都会回滚全部变更。预览、无效文件及失败不创建导入历史。没有部分导入、删除操作或自动建议。
+
+An identical successful SHA-256 hash returns `already_processed=true`, the original `import_run_id`, zero created/updated counts, and a skipped count equal to the file's row count. It neither rewrites current pages nor duplicates runs/snapshots, even if another file changed a page afterward. The original run's stored counts are preserved. Reusing a filename with different bytes is a new import; byte-level formatting changes can also create a new run. Duplicate-import protection is separate from duplicate URLs inside one file, which still block apply.
+相同的成功 SHA-256 哈希返回 `already_processed=true`、原 `import_run_id`、零新增与更新数，以及等于文件行数的跳过数。它既不重写当前页面，也不重复创建导入与快照，即使此后另一个文件改变了页面。原导入存储的统计保持不变。同名但字节不同的文件是新导入；字节级格式变化也可能创建新记录。重复导入保护与单文件内的重复 URL 不同；后者仍会阻止应用。
 
 ## API contract / API 契约
 
@@ -97,8 +103,8 @@ curl -X POST http://localhost:8000/api/v1/imports/gsc/pages/preview \
   -F 'file=@gsc-pages.csv'
 ```
 
-The preview response includes `source="gsc_pages"`, `reporting_window="latest_28_days"`, `detected_sheet` (`null` for CSV), `total_rows`, `valid_rows`, `invalid_rows`, `duplicate_rows`, `column_mapping`, `errors`, `sample_rows`, `can_apply`, and `preview_hash`. Each error has `row`, `field`, `code`, and a human-readable `message`. Samples include source `row`, `url`, and the four normalized GSC fields. Decimal fields serialize as JSON strings, for example `"0.025000"`; missing metrics serialize as `null`.
-预览响应包含 `source="gsc_pages"`、`reporting_window="latest_28_days"`、`detected_sheet`（CSV 为 `null`）、`total_rows`、`valid_rows`、`invalid_rows`、`duplicate_rows`、`column_mapping`、`errors`、`sample_rows`、`can_apply` 与 `preview_hash`。每个错误包含 `row`、`field`、`code` 及易理解的 `message`。样本包含源 `row`、`url` 及四个标准化 GSC 字段。小数字段序列化为 JSON 字符串，例如 `"0.025000"`；缺失指标序列化为 `null`。
+The preview response includes `source="gsc_pages"`, `reporting_window="latest_28_days"`, `period_start`, `period_end`, `period_status` (`exact` or `unknown`), `detected_sheet` (`null` for CSV), `total_rows`, `valid_rows`, `invalid_rows`, `duplicate_rows`, `column_mapping`, `errors`, `sample_rows`, `can_apply`, and `preview_hash`. Each error has `row`, `field`, `code`, and a human-readable `message`. Samples include source `row`, `url`, and the four normalized GSC fields. Decimal fields serialize as JSON strings, for example `"0.025000"`; missing metrics serialize as `null`.
+预览响应包含 `source="gsc_pages"`、`reporting_window="latest_28_days"`、`period_start`、`period_end`、`period_status`（`exact` 或 `unknown`）、`detected_sheet`（CSV 为 `null`）、`total_rows`、`valid_rows`、`invalid_rows`、`duplicate_rows`、`column_mapping`、`errors`、`sample_rows`、`can_apply` 与 `preview_hash`。每个错误包含 `row`、`field`、`code` 及易理解的 `message`。样本包含源 `row`、`url` 及四个标准化 GSC 字段。小数字段序列化为 JSON 字符串，例如 `"0.025000"`；缺失指标序列化为 `null`。
 
 Replace the placeholder below with the exact 64-character lowercase hexadecimal hash returned by preview:
 将下方占位符替换为预览返回的准确 64 位小写十六进制哈希：
@@ -110,8 +116,8 @@ curl -X POST http://localhost:8000/api/v1/imports/gsc/pages/apply \
   -F 'preview_hash=REPLACE_WITH_PREVIEW_HASH'
 ```
 
-Success returns `created_count`, `updated_count`, `skipped_count`, and `error_count` (`0` after a successful atomic import). A failed operation returns an HTTP error instead of reporting partial success.
-成功时返回 `created_count`、`updated_count`、`skipped_count` 与 `error_count`（成功的原子导入后为 `0`）。失败操作返回 HTTP 错误，不会报告部分成功。
+Success returns `import_run_id`, `already_processed`, `created_count`, `updated_count`, `skipped_count`, and `error_count` (`0` after success). For a new run, row counts describe current-page changes; snapshots are created even for skipped unchanged pages. A failed operation returns an HTTP error instead of reporting partial success. Historical read APIs are documented in [performance-history.md](performance-history.md).
+成功时返回 `import_run_id`、`already_processed`、`created_count`、`updated_count`、`skipped_count` 与 `error_count`（成功后为 `0`）。新导入的行数描述当前页面变化；跳过的未变化页面仍会创建快照。失败操作返回 HTTP 错误，不会报告部分成功。历史读取 API 详见 [performance-history.md](performance-history.md)。
 
 ```sh
 curl 'http://localhost:8000/api/v1/pages?page=1&page_size=50'
@@ -141,8 +147,8 @@ Maximum upload size is 5 MiB, maximum expanded XLSX ZIP contents are 50 MiB, and
 Uploads are read in memory or framework-managed ephemeral upload storage; the application does not save source files permanently. Real exports and scratch data must remain outside Git. Automated CSV/XLSX fixtures are generated with synthetic URLs and metrics, not copied from a private export. Protect the local environment: authentication, authorization, production upload hardening, and production deployment are outside this phase.
 上传文件通过内存或框架管理的临时上传存储读取；应用不会永久保存源文件。真实导出与临时数据必须留在 Git 之外。自动化 CSV/XLSX 测试数据使用合成 URL 与指标生成，不从私人导出复制。请保护本地环境：身份认证、权限控制、生产上传加固与生产部署不属于本阶段。
 
-No schema migration is needed beyond the Phase 1 migration. The model stores only current supplied metrics, without import history, date anchors, per-site ownership, or metric snapshots. Blank metric updates intentionally preserve previous values, so a record can contain observations from different uploads. This cannot support historical trend claims or prove that a metadata-free file actually covers 28 days. See [data-model.md](data-model.md) for these persistence limits.
-第一阶段迁移之外无需新增数据库迁移。模型仅存储当前提供的指标，没有导入历史、日期基准、站点归属或指标快照。空白指标更新有意保留此前值，因此记录可能包含不同上传的观察结果。这不能支持历史趋势结论，也不能证明没有元数据的文件确实覆盖 28 天。持久化限制详见 [data-model.md](data-model.md)。
+Apply migration `0002_import_history` before using Phase 3. `WebsitePage` remains latest applied state; snapshots now preserve each new successful import's source observations and known dates. Existing Phase 2 imports have no fabricated history. There is no per-site ownership model. Unknown dates cannot be used in period comparisons; observed bounds alone do not prove complete 28-day coverage. Blank current-page updates can mix observations from different uploads, and out-of-order uploads can make current state differ from the latest reporting period. See [data-model.md](data-model.md) and [performance-history.md](performance-history.md) for these limits.
+使用第三阶段前请应用迁移 `0002_import_history`。`WebsitePage` 仍为最近应用的状态；快照现保留每个新的成功导入的来源观察及已知日期。不为已有第二阶段导入编造历史。没有站点归属模型。未知日期不能用于时间段对比；仅观察起止日期不能证明完整 28 天覆盖。当前页面的空白更新可能混合不同上传的观察，乱序上传可能使当前状态与最新报告时间段不同。这些限制详见 [data-model.md](data-model.md) 与 [performance-history.md](performance-history.md)。
 
-Phase 2 contains no SEO analysis, scoring, opportunities, recommendations, AI, GSC API integration, query import, editing/deletion, background jobs, or execution. Phase 3 has not started.
-第二阶段不包含 SEO 分析、评分、机会、建议、AI、GSC API 集成、查询导入、编辑删除、后台任务或执行。第三阶段尚未开始。
+Phase 3 adds descriptive comparisons only. It contains no SEO judgments, scoring, opportunities, recommendations, AI, GSC API integration, query import, editing/deletion, background jobs, or execution. Phase 4 has not started.
+第三阶段仅增加描述性对比。不包含 SEO 判断、评分、机会、建议、AI、GSC API 集成、查询导入、编辑删除、后台任务或执行。第四阶段尚未开始。

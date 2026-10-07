@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <main>
       <header>
-        <p className="eyebrow">Phase 2 · Development interface / 第二阶段 · 开发界面</p>
+        <p className="eyebrow">Phase 3 · Development interface / 第三阶段 · 开发界面</p>
         <h1>SEO Tool</h1>
         <p className="intro">
           Import, validate, and view Google Search Console page data.
@@ -25,6 +25,7 @@ export default function Home() {
         <p>Preview a latest-28-day Pages export, confirm import, then view stored metrics. 预览最近 28 天的网页导出文件，确认导入后查看已保存指标。</p>
         <p><Link href="/imports/gsc">Import GSC pages / 导入 GSC 网页 →</Link></p>
         <p><Link href="/pages">View stored pages / 查看已保存页面 →</Link></p>
+        <p><Link href="/imports/history">View import history / 查看导入历史 →</Link></p>
       </section>
     </main>
   );

@@ -14,11 +14,11 @@ from app.models import WebsitePage
 
 
 def test_import_creates_records_and_keeps_unknown_fields_null(gsc_engine):
-    rows = parse_gsc_pages(
+    parsed = parse_gsc_pages(
         csv_file(["https://example.com/new/", 0, 100, "2.5%", "6.75"]), "pages.csv"
-    ).rows
+    )
     with Session(gsc_engine) as session:
-        result = persist_gsc_pages(session, rows)
+        result = persist_gsc_pages(session, parsed)
         assert (result.created_count, result.updated_count, result.error_count) == (1, 0, 0)
         page = session.scalars(select(WebsitePage)).one()
         assert page.url == "https://example.com/new/"
@@ -66,9 +66,9 @@ def test_import_updates_supplied_metrics_without_erasing_blank_or_unrelated_fiel
         original_id = page.id
         original_created_at = page.created_at
         session.commit()
-        rows = parse_gsc_pages(csv_file([page.url, 10, "", "", "3.5"]), "pages.csv").rows
+        parsed = parse_gsc_pages(csv_file([page.url, 10, "", "", "3.5"]), "pages.csv")
         session.commit()
-        result = persist_gsc_pages(session, rows)
+        result = persist_gsc_pages(session, parsed)
         session.refresh(page)
         assert (result.created_count, result.updated_count, result.skipped_count) == (0, 1, 0)
         assert page.id == original_id
@@ -92,19 +92,19 @@ def test_import_updates_supplied_metrics_without_erasing_blank_or_unrelated_fiel
 
 def test_reimport_unchanged_or_blank_metrics_is_skipped(gsc_engine):
     content = csv_file(["https://example.com/page", 10, 100, "10%", "5"])
-    rows = parse_gsc_pages(content, "pages.csv").rows
+    parsed = parse_gsc_pages(content, "pages.csv")
     with Session(gsc_engine) as session:
-        assert persist_gsc_pages(session, rows).created_count == 1
+        assert persist_gsc_pages(session, parsed).created_count == 1
         page = session.scalars(select(WebsitePage)).one()
         original_updated_at = page.updated_at
         session.commit()
-        assert persist_gsc_pages(session, rows).skipped_count == 1
+        assert persist_gsc_pages(session, parsed).skipped_count == 1
         session.refresh(page)
         assert page.updated_at == original_updated_at
         session.commit()
-        blank_rows = parse_gsc_pages(csv_file([page.url, "", "", "", ""]), "pages.csv").rows
+        blank_parsed = parse_gsc_pages(csv_file([page.url, "", "", "", ""]), "pages.csv")
         session.commit()
-        assert persist_gsc_pages(session, blank_rows).skipped_count == 1
+        assert persist_gsc_pages(session, blank_parsed).skipped_count == 1
         session.refresh(page)
         assert page.clicks_28d == 10
         assert page.updated_at == original_updated_at
@@ -115,14 +115,14 @@ def test_later_database_failure_rolls_back_creates_and_updates(gsc_engine, monke
         existing = WebsitePage(url="https://example.com/a-existing", clicks_28d=1)
         session.add(existing)
         session.commit()
-        rows = parse_gsc_pages(
+        parsed = parse_gsc_pages(
             csv_file(
                 [existing.url, 10, 100, "10%", "5"],
                 ["https://example.com/b-new", 20, 200, "10%", "5"],
                 ["https://example.com/c-fails", 30, 300, "10%", "5"],
             ),
             "pages.csv",
-        ).rows
+        )
         session.commit()
         original_execute = session.execute
         calls = 0
@@ -136,7 +136,7 @@ def test_later_database_failure_rolls_back_creates_and_updates(gsc_engine, monke
 
         monkeypatch.setattr(session, "execute", fail_later)
         with pytest.raises(SQLAlchemyError):
-            persist_gsc_pages(session, rows)
+            persist_gsc_pages(session, parsed)
 
     with Session(gsc_engine) as verification:
         saved = verification.scalars(select(WebsitePage)).all()
@@ -145,16 +145,18 @@ def test_later_database_failure_rolls_back_creates_and_updates(gsc_engine, monke
 
 
 def test_concurrent_same_url_imports_create_exactly_one_record(gsc_engine):
-    rows = parse_gsc_pages(
-        csv_file(["https://example.com/concurrent", 10, 100, "10%", 5]), "pages.csv"
-    ).rows
+    content = csv_file(["https://example.com/concurrent", 10, 100, "10%", 5])
+    files = [
+        parse_gsc_pages(content, "first.csv"),
+        parse_gsc_pages(b"\n" + content, "second.csv"),
+    ]
 
-    def import_once():
+    def import_once(parsed):
         with Session(gsc_engine) as session:
-            return persist_gsc_pages(session, rows)
+            return persist_gsc_pages(session, parsed)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(lambda _: import_once(), range(2)))
+        results = list(executor.map(import_once, files))
     assert sum(result.created_count for result in results) == 1
     assert sum(result.skipped_count for result in results) == 1
     with Session(gsc_engine) as session:

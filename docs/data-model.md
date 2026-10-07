@@ -2,9 +2,9 @@
 
 ## Purpose / 目的
 
-Phase 1 defines two PostgreSQL tables: `website_pages` stores a page and its latest known SEO metrics; `seo_opportunities` stores potential actions related to that page. Phase 2 imports GSC page metrics into `website_pages` without changing the schema. SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
+PostgreSQL stores four tables. `website_pages` holds the latest applied page state; `seo_opportunities` remains a future action contract. Phase 3 adds `import_runs` for successful file imports and `page_performance_snapshots` for their normalized observations. Deterministic comparison reads snapshots; SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
 
-第一阶段定义两个 PostgreSQL 表：`website_pages` 存储页面及其最新已知 SEO 指标；`seo_opportunities` 存储与该页面相关的潜在行动。第二阶段将 GSC 网页指标导入 `website_pages`，不改变数据库结构。SEO 规则、评分、机会生成及建议仍未实现。
+PostgreSQL 存储四个表。`website_pages` 保存最近应用的页面状态；`seo_opportunities` 仍为未来行动契约。第三阶段增加用于成功文件导入的 `import_runs` 及用于其标准化观察结果的 `page_performance_snapshots`。确定性对比读取快照；SEO 规则、评分、机会生成及建议仍未实现。
 
 SQLAlchemy models define the schema and Alembic creates it through an explicit migration. Model changes require a corresponding migration. FastAPI startup and the health endpoint do not create tables or check database connectivity.
 
@@ -18,10 +18,10 @@ SQLAlchemy 模型定义数据库结构，Alembic 通过显式迁移创建结构�
 - **未知值：** 可空指标以 `NULL` 表示未知或尚未观察的值。零表示已测量且结果为零。导入时不得将缺失指标转换为零。
 - **Numeric values:** SQLAlchemy uses decimal values for `Numeric` fields. Store CTR and confidence as fractions from `0` to `1`; for example, `0.025` means 2.5%.
 - **数值：** SQLAlchemy 为 `Numeric` 字段使用十进制值。点击率与置信度以 `0` 至 `1` 的比例存储；例如，`0.025` 表示 2.5%。
-- **Time:** PostgreSQL `TIMESTAMP WITH TIME ZONE` represents instants. Application code and documentation use UTC; display and input/output offsets must be handled explicitly by future APIs.
-- **时间：** PostgreSQL `TIMESTAMP WITH TIME ZONE` 表示时间点。应用代码及文档采用 UTC；未来 API 必须明确处理显示及输入输出中的时区偏移。
-- **Classification:** Page types, index statuses, opportunity types, severity, risk levels, and opportunity statuses are strings. Phase 1 does not establish a fixed taxonomy or derive classifications.
-- **分类：** 页面类型、索引状态、机会类型、严重程度、风险级别及机会状态均使用字符串。第一阶段不定义固定分类体系，也不推导分类。
+- **Time:** PostgreSQL `TIMESTAMP WITH TIME ZONE` represents instants; history APIs return offset-bearing timestamps. Reporting periods use calendar `DATE` values, not instants or inferred import dates.
+- **时间：** PostgreSQL `TIMESTAMP WITH TIME ZONE` 表示时间点；历史 API 返回带偏移的时间戳。报告时间段使用日历 `DATE` 值，不是时间点或推导的导入日期。
+- **Classification:** Page types, index statuses, opportunity types, severity, risk levels, and opportunity statuses are strings. No fixed SEO taxonomy or derived classification is implemented.
+- **分类：** 页面类型、索引状态、机会类型、严重程度、风险级别及机会状态均使用字符串。不实现固定 SEO 分类体系或推导分类。
 
 ## WebsitePage / 网站页面
 
@@ -65,9 +65,9 @@ The six click/impression fields, word count, link counts, and backlinks have non
 
 ## SEOOpportunity / SEO 机会
 
-The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 2 has no opportunity writer API, opportunity generator, or scoring implementation.
+The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 3 has no opportunity writer API, opportunity generator, or scoring implementation.
 
-`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第二阶段没有机会写入 API、机会生成器或评分实现。
+`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第三阶段没有机会写入 API、机会生成器或评分实现。
 
 | Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning and constraints / 含义与约束 |
 | --- | --- | --- | --- |
@@ -89,24 +89,67 @@ The database constrains `opportunity_score` to non-negative values and `confiden
 
 数据库约束 `opportunity_score` 为非负值，`confidence` 位于 `[0, 1]`。它不规定评分上限、严重程度排序、允许的状态变化或 AI 推导含义。未来评分功能必须在写入评分前记录量表及输入。
 
+## ImportRun / 导入记录
+
+`ImportRun` maps to `import_runs` and describes one successfully applied source file. The supported taxonomy is `source="gsc"`, `source_type="pages_performance"`, and `reporting_window="latest_28_days"`. These source identifiers differ from the preview's convenient `source="gsc_pages"` label.
+`ImportRun` 对应 `import_runs`，描述一个成功应用的来源文件。支持的分类为 `source="gsc"`、`source_type="pages_performance"` 与 `reporting_window="latest_28_days"`。这些来源标识与预览中的便捷标签 `source="gsc_pages"` 不同。
+
+| Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning / 含义 |
+| --- | --- | --- | --- |
+| `id` | `UUID` | No / 否 | Application-generated primary key.<br>应用生成的主键。 |
+| `source` | `VARCHAR(30)` | No / 否 | Defaults to `gsc`.<br>默认 `gsc`。 |
+| `source_type` | `VARCHAR(50)` | No / 否 | Defaults to `pages_performance`.<br>默认 `pages_performance`。 |
+| `file_hash` | `VARCHAR(64)` | No / 否 | Lowercase hexadecimal SHA-256 of source bytes.<br>来源字节的小写十六进制 SHA-256。 |
+| `filename` | `TEXT` | No / 否 | Original successful upload's filename metadata; not a date source or file store.<br>原成功上传的文件名元数据；不是日期来源或文件存储。 |
+| `reporting_window` | `VARCHAR(30)` | No / 否 | Defaults to `latest_28_days`.<br>默认 `latest_28_days`。 |
+| `period_start`, `period_end` | `DATE` | Yes / 是 | Observed calendar-date endpoints, or both `NULL`.<br>已观察的日历日期起止值，或两者均为 `NULL`。 |
+| `imported_at` | `TIMESTAMP WITH TIME ZONE` | No / 否 | Successful import time; database default `now()`.<br>成功导入时间；数据库默认 `now()`。 |
+| `total_rows` | `INTEGER` | No / 否 | Validated source row count.<br>已校验的来源行数。 |
+| `created_count`, `updated_count`, `skipped_count` | `INTEGER` | No / 否 | Current-page outcomes, nonnegative, defaults `0`.<br>当前页面处理结果，非负，默认 `0`。 |
+| `status` | `VARCHAR(30)` | No / 否 | Successful service writes use `completed`.<br>成功的服务写入使用 `completed`。 |
+
+The database validates SHA-256 shape, nonnegative counts, `created_count + updated_count + skipped_count = total_rows`, paired dates, and `period_start <= period_end`. `(source, source_type, file_hash)` is unique. Indexes on `imported_at` and `(period_start, period_end)` support import history and period lookup. `period_status` is an API-derived `exact`/`unknown` value, not a separate database column.
+数据库校验 SHA-256 格式、非负计数、`created_count + updated_count + skipped_count = total_rows`、成对日期及 `period_start <= period_end`。`(source, source_type, file_hash)` 唯一。`imported_at` 及 `(period_start, period_end)` 索引支持导入历史与时间段查询。`period_status` 是 API 推导的 `exact` 或 `unknown` 值，不是独立数据库列。
+
+## PagePerformanceSnapshot / 页面性能快照
+
+`PagePerformanceSnapshot` maps to `page_performance_snapshots`. One row records one imported page's normalized source observations within an import. It is not a copy of the page's preserved current state: blank incoming metrics remain `NULL` in the snapshot even if the current page retains older nonblank values. Each new file creates snapshots for unchanged pages too.
+`PagePerformanceSnapshot` 对应 `page_performance_snapshots`。一行记录一次导入中一个页面的标准化来源观察。它不是保留下来的当前页面状态副本：即使当前页面保留了较早的非空白值，传入空白指标在快照中仍为 `NULL`。每个新文件也为未变化的页面创建快照。
+
+| Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning / 含义 |
+| --- | --- | --- | --- |
+| `id` | `UUID` | No / 否 | Application-generated primary key.<br>应用生成的主键。 |
+| `import_run_id` | `UUID` | No / 否 | Foreign key to `import_runs.id`.<br>关联 `import_runs.id` 的外键。 |
+| `page_id` | `UUID` | No / 否 | Foreign key to `website_pages.id`.<br>关联 `website_pages.id` 的外键。 |
+| `url` | `TEXT` | No / 否 | Exact trimmed URL observed in this file.<br>本文件中观察到的去除前后空白的精确 URL。 |
+| `clicks`, `impressions` | `BIGINT` | Yes / 是 | Nonnegative source counts; unknown remains `NULL`.<br>非负来源计数；未知保持 `NULL`。 |
+| `ctr` | `NUMERIC(7,6)` | Yes / 是 | Fraction constrained to `[0, 1]`.<br>限制为 `[0, 1]` 的比例。 |
+| `average_position` | `NUMERIC(10,4)` | Yes / 是 | Nonnegative source average position.<br>非负来源平均排名。 |
+| `period_start`, `period_end` | `DATE` | Yes / 是 | Same observed endpoints as the import, or both `NULL`.<br>与导入相同的已观察起止日期，或两者均为 `NULL`。 |
+| `created_at` | `TIMESTAMP WITH TIME ZONE` | No / 否 | Snapshot insertion time; database default `now()`.<br>快照插入时间；数据库默认 `now()`。 |
+
+`(import_run_id, page_id)` is unique, preventing duplicate page snapshots within a run. Date pairs must be both known or both unknown and ascend when known. A composite index on `(page_id, period_end, period_start)` supports page history and reporting-date queries. Source, source type, reporting window, and import time are read from the parent run rather than duplicated on snapshots. Snapshots contain no SEO judgment or score.
+`(import_run_id, page_id)` 唯一，防止同一次导入中的页面快照重复。日期对必须均已知或均未知，已知时按先后排序。`(page_id, period_end, period_start)` 复合索引支持页面历史与报告日期查询。来源、来源类型、报告窗口及导入时间从父导入记录读取，不在快照中重复。快照不包含 SEO 判断或评分。
+
 ## Relationships and indexes / 关联与索引
 
 ```text
 website_pages.id (UUID)
-  └── seo_opportunities.page_id (UUID, NOT NULL)
-      One page → zero or more opportunities
-      一个页面 → 零个或多个机会
+  ├── seo_opportunities.page_id (UUID, NOT NULL)
+  └── page_performance_snapshots.page_id (UUID, NOT NULL)
+import_runs.id (UUID)
+  └── page_performance_snapshots.import_run_id (UUID, NOT NULL)
 ```
 
-The foreign key uses `ON DELETE RESTRICT`. Deleting a page with existing opportunities is rejected by PostgreSQL. The ORM relationship does not automatically delete child opportunities or set their foreign keys to `NULL`; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 2 provides no deletion API.
+Foreign keys use `ON DELETE RESTRICT`. PostgreSQL rejects deleting a page with opportunities or snapshots, or an import with snapshots. ORM relationships do not automatically delete children or clear required foreign keys; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 3 provides no deletion API.
 
-外键采用 `ON DELETE RESTRICT`。PostgreSQL 会拒绝删除仍有关联机会的页面。ORM 关联不会自动删除子机会，也不会将其外键设为 `NULL`；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第二阶段不提供删除 API。
+外键采用 `ON DELETE RESTRICT`。PostgreSQL 拒绝删除有机会或快照的页面，或有快照的导入。ORM 关联不会自动删除子项或清空必填外键；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第三阶段不提供删除 API。
 
-PostgreSQL automatically indexes both primary keys and the unique `website_pages.url` constraint. Explicit indexes on `seo_opportunities.page_id` and `seo_opportunities.status` support future per-page and status-filtered queries. No speculative analytics indexes are added.
+PostgreSQL automatically indexes primary keys and uniqueness constraints. Existing indexes on `seo_opportunities.page_id` and `seo_opportunities.status` remain. The new history indexes serve implemented read APIs and comparisons, without speculative SEO analytics indexes.
 
-PostgreSQL 自动为两个主键及 `website_pages.url` 唯一性约束创建索引。`seo_opportunities.page_id` 和 `seo_opportunities.status` 的显式索引支持未来按页面及状态筛选的查询。当前不添加预测性的分析索引。
+PostgreSQL 自动为主键与唯一性约束创建索引。原有的 `seo_opportunities.page_id` 与 `seo_opportunities.status` 索引保留。新的历史索引服务于已实现的读取 API 与对比，不增加预测性的 SEO 分析索引。
 
-## Phase 2 write boundary / 第二阶段写入边界
+## Current-page write boundary / 当前页面写入边界
 
 | GSC value / GSC 值 | Model field / 模型字段 | Stored representation / 存储形式 |
 | --- | --- | --- |
@@ -121,12 +164,18 @@ Confirmed imports upsert by the exact trimmed URL within a transaction. A new ro
 The import never populates the seven-day or previous-28-day fields, infers page type or keywords, or changes business value, backlinks, indexing, word count, content timestamps, titles, or opportunity records. Row creation/modification timestamps retain their normal model behavior. The import contract and numeric validation are in [gsc-import.md](gsc-import.md).
 导入不会填充七天或前 28 天字段，不会推导页面类型或关键词，也不会修改业务价值、外链、索引、字词数、内容时间戳、标题或机会记录。行创建与修改时间戳保留模型的正常行为。导入契约及数值校验详见 [gsc-import.md](gsc-import.md)。
 
+Phase 3 writes current pages, one completed run, and all snapshots atomically. Failure in any of these writes rolls back all of them; no failed run is retained. An already-successful identical hash returns the original run without writes. Snapshot `clicks`/`impressions` correspond to current-page `clicks_28d`/`impressions_28d`, but use only this file's observations. Comparison never writes calculated changes into the current page or `*_previous_28d` fields.
+第三阶段原子写入当前页面、一个已完成导入及全部快照。任何写入失败都会回滚所有写入；不保留失败导入。已成功的相同哈希返回原导入，不执行写入。快照 `clicks` 与 `impressions` 对应当前页面的 `clicks_28d` 与 `impressions_28d`，但仅使用本文件的观察。对比绝不将计算出的变化写入当前页面或 `*_previous_28d` 字段。
+
+Revision `0002_import_history` creates the new tables, checks, foreign keys, and indexes without altering existing page/opportunity data. Earlier imports are not backfilled because their source bytes, dates, and provenance cannot be reconstructed reliably. Downgrading this revision removes only the new history tables and their contents; current-page data remains. Normal use requires upgrading to head.
+修订 `0002_import_history` 创建新表、检查、外键与索引，不改变已有页面及机会数据。不回填此前导入，因为其来源字节、日期与来源追踪无法可靠重建。降级此修订仅移除新历史表及其内容；当前页面数据保留。正常使用需要升级至最新修订。
+
 ## Deliberate limits / 当前限制
 
-The page model stores one latest set of metrics; it is not a time-series snapshot table. The 7-day and 28-day fields do not store an observation-date anchor, source, or refresh history. Phase 2 treats GSC page imports as the latest 28 days; CSV and workbooks without date filters require the user to select that window before export. Successive imports may combine previously supplied values with newly supplied ones, so this is not a historical reporting or trend-comparison system. Add provenance or dated snapshots only when an implemented feature requires them.
+`WebsitePage` remains the latest successfully applied nonblank state, not a dated historical record. Successive files can combine metrics or apply an older reporting period later. Use snapshots and their runs for dated comparison, never current-page fields as historical evidence. Unknown period dates stay `NULL`; known observed endpoints do not certify a complete or contiguous 28-day export. Identical-file protection uses bytes, not semantic row equivalence.
 
-页面模型仅存储一组最新指标，并非时间序列快照表。7 天与 28 天字段不存储观察日期基准、数据来源或刷新历史。第二阶段将 GSC 网页导入视为最近 28 天；CSV 及没有日期筛选的工作簿要求用户在导出前选择该窗口。连续导入可能将此前提供的值与新提供的值组合，因此这不是历史报告或趋势对比系统。只有已实现的功能确实需要时，才增加来源追踪或带日期的快照。
+`WebsitePage` 仍为最近成功应用的非空白状态，不是带日期的历史记录。连续文件可组合指标，或后来应用较早报告时间段。带日期的对比使用快照及其导入记录，绝不将当前页面字段作为历史证据。未知时间段日期保持 `NULL`；已知的已观察起止日期不能证明完整或连续的 28 天导出。相同文件保护使用字节，不使用语义行等价性。
 
-The foundation has no multi-site ownership model, user authentication, full-text search, audit trail, recommendation versions, scoring formula, or SEO rule taxonomy. These remain separate design decisions for later phases rather than implicit promises of this schema.
+There is no multi-site ownership model, user authentication, full-text search, failed-attempt log, tamper-proof audit trail, recommendation versions, scoring formula, or SEO rule taxonomy. Successful-import history is a lightweight provenance record, not a complete audit system. See [performance-history.md](performance-history.md) for comparison selection and missing-data rules.
 
-此基础架构不包含多站点归属模型、用户认证、全文搜索、审计记录、建议版本、评分公式或 SEO 规则分类。这些将作为后续阶段的独立设计决策，而非当前数据库结构的隐含承诺。
+没有多站点归属模型、用户认证、全文搜索、失败尝试日志、防篡改审计记录、建议版本、评分公式或 SEO 规则分类。成功导入历史是轻量的来源追踪记录，不是完整审计系统。对比选择与缺失数据规则详见 [performance-history.md](performance-history.md)。

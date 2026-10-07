@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.page_performance_snapshot import PagePerformanceSnapshot
     from app.models.seo_opportunity import SEOOpportunity
 
 
@@ -88,5 +89,8 @@ class WebsitePage(Base):
     # Retain opportunities unless they are explicitly removed before deleting a page.
     # 保留机会记录，删除页面前需要显式删除关联的机会记录。
     opportunities: Mapped[list[SEOOpportunity]] = relationship(
+        back_populates="page", passive_deletes="all"
+    )
+    performance_snapshots: Mapped[list[PagePerformanceSnapshot]] = relationship(
         back_populates="page", passive_deletes="all"
     )

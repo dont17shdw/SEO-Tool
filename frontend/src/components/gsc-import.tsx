@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { PageMetricsTable } from "@/components/page-metrics-table";
+import { formatPeriod } from "@/lib/history-api";
 import {
   applyGscFile,
   previewGscFile,
@@ -132,6 +133,7 @@ export function GscImport() {
             <div><dt>Source / 数据源</dt><dd>Google Search Console Pages / 网页</dd></div>
             <div><dt>Sheet / 工作表</dt><dd>{preview.detected_sheet ?? "CSV (no sheet) / CSV（无工作表）"}</dd></div>
             <div><dt>Window / 时间窗口</dt><dd>Latest 28 days / 最近 28 天</dd></div>
+            <div><dt>Exact report dates / 精确报告日期</dt><dd>{formatPeriod(preview)}</dd></div>
             <div><dt>Total rows / 总行数</dt><dd>{preview.total_rows}</dd></div>
             <div><dt>Valid rows / 有效行</dt><dd>{preview.valid_rows}</dd></div>
             <div><dt>Invalid rows / 无效行</dt><dd>{preview.invalid_rows}</dd></div>
@@ -192,7 +194,8 @@ export function GscImport() {
 
       {result && (
         <section className="card" role="status" aria-labelledby="result-heading">
-          <h2 id="result-heading">Import complete / 导入完成</h2>
+          <h2 id="result-heading">{result.already_processed ? "Already processed / 已处理" : "Import complete / 导入完成"}</h2>
+          {result.already_processed && <p>This exact file was already imported. No new history, snapshots, or page changes were applied. 此文件此前已导入。本次未新增历史、快照或页面变更。</p>}
           <dl className="summary-grid">
             <div><dt>Created / 新建</dt><dd>{result.created_count}</dd></div>
             <div><dt>Updated / 更新</dt><dd>{result.updated_count}</dd></div>
@@ -200,6 +203,8 @@ export function GscImport() {
             <div><dt>Errors / 错误</dt><dd>{result.error_count}</dd></div>
           </dl>
           <Link href="/pages">View imported pages / 查看已导入页面 →</Link>
+          <p><Link href="/imports/history">View import history / 查看导入历史 →</Link></p>
+          <p><small>Import ID / 导入 ID：{result.import_run_id}</small></p>
         </section>
       )}
     </>
