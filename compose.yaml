@@ -1,0 +1,24 @@
+# Run only the local development database; start the apps on the host.
+# 仅运行本地开发数据库；应用程序在宿主机上启动。
+name: seo-tool
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-seo_tool}
+      POSTGRES_USER: ${POSTGRES_USER:-seo_tool}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seo_tool_dev}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  postgres_data:
