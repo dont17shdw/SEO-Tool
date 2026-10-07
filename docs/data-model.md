@@ -2,9 +2,9 @@
 
 ## Purpose / 目的
 
-PostgreSQL stores four tables. `website_pages` holds the latest applied page state; `seo_opportunities` remains a future action contract. Phase 3 adds `import_runs` for successful file imports and `page_performance_snapshots` for their normalized observations. Deterministic comparison reads snapshots; SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
+PostgreSQL stores four tables. `website_pages` holds the latest applied page state; `seo_opportunities` remains a future action contract. Phase 3 added `import_runs` and `page_performance_snapshots`. Phase 4 computes quality observations and readiness from these existing records without persisting them or changing the schema. SEO rules, scoring, opportunity generation, and recommendations remain unimplemented.
 
-PostgreSQL 存储四个表。`website_pages` 保存最近应用的页面状态；`seo_opportunities` 仍为未来行动契约。第三阶段增加用于成功文件导入的 `import_runs` 及用于其标准化观察结果的 `page_performance_snapshots`。确定性对比读取快照；SEO 规则、评分、机会生成及建议仍未实现。
+PostgreSQL 存储四个表。`website_pages` 保存最近应用的页面状态；`seo_opportunities` 仍为未来行动契约。第三阶段增加 `import_runs` 与 `page_performance_snapshots`。第四阶段根据这些已有记录计算质量观察与就绪度，不持久化它们，也不改变数据库结构。SEO 规则、评分、机会生成及建议仍未实现。
 
 SQLAlchemy models define the schema and Alembic creates it through an explicit migration. Model changes require a corresponding migration. FastAPI startup and the health endpoint do not create tables or check database connectivity.
 
@@ -65,9 +65,9 @@ The six click/impression fields, word count, link counts, and backlinks have non
 
 ## SEOOpportunity / SEO 机会
 
-The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 3 has no opportunity writer API, opportunity generator, or scoring implementation.
+The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. The schema can store future recommendations, but Phase 4 has no opportunity writer API, opportunity generator, or scoring implementation. Quality requests create no opportunity records.
 
-`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第三阶段没有机会写入 API、机会生成器或评分实现。
+`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。数据库结构可存储未来的建议，但第四阶段没有机会写入 API、机会生成器或评分实现。质量请求不创建机会记录。
 
 | Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning and constraints / 含义与约束 |
 | --- | --- | --- | --- |
@@ -141,9 +141,9 @@ import_runs.id (UUID)
   └── page_performance_snapshots.import_run_id (UUID, NOT NULL)
 ```
 
-Foreign keys use `ON DELETE RESTRICT`. PostgreSQL rejects deleting a page with opportunities or snapshots, or an import with snapshots. ORM relationships do not automatically delete children or clear required foreign keys; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 3 provides no deletion API.
+Foreign keys use `ON DELETE RESTRICT`. PostgreSQL rejects deleting a page with opportunities or snapshots, or an import with snapshots. ORM relationships do not automatically delete children or clear required foreign keys; `passive_deletes="all"` leaves enforcement to the database. A future deletion flow must handle related records explicitly. Phase 4 provides no deletion API.
 
-外键采用 `ON DELETE RESTRICT`。PostgreSQL 拒绝删除有机会或快照的页面，或有快照的导入。ORM 关联不会自动删除子项或清空必填外键；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第三阶段不提供删除 API。
+外键采用 `ON DELETE RESTRICT`。PostgreSQL 拒绝删除有机会或快照的页面，或有快照的导入。ORM 关联不会自动删除子项或清空必填外键；`passive_deletes="all"` 将约束执行交给数据库。未来删除流程必须明确处理关联记录。第四阶段不提供删除 API。
 
 PostgreSQL automatically indexes primary keys and uniqueness constraints. Existing indexes on `seo_opportunities.page_id` and `seo_opportunities.status` remain. The new history indexes serve implemented read APIs and comparisons, without speculative SEO analytics indexes.
 
@@ -169,6 +169,17 @@ Phase 3 writes current pages, one completed run, and all snapshots atomically. F
 
 Revision `0002_import_history` creates the new tables, checks, foreign keys, and indexes without altering existing page/opportunity data. Earlier imports are not backfilled because their source bytes, dates, and provenance cannot be reconstructed reliably. Downgrading this revision removes only the new history tables and their contents; current-page data remains. Normal use requires upgrading to head.
 修订 `0002_import_history` 创建新表、检查、外键与索引，不改变已有页面及机会数据。不回填此前导入，因为其来源字节、日期与来源追踪无法可靠重建。降级此修订仅移除新历史表及其内容；当前页面数据保留。正常使用需要升级至最新修订。
+
+## Runtime quality contract / 运行时质量契约
+
+Phase 4 requires no migration; `0002_import_history` remains head. `analysis/data_quality.py` produces structured observations, counts, and page readiness from existing snapshots/imports and the selected Phase 3 comparison. These are response contracts, not database models. Quality requests do not mutate current metrics, history, or opportunities and do not backfill missing observations.
+第四阶段无需迁移；`0002_import_history` 仍为最新修订。`analysis/data_quality.py` 根据已有快照与导入及第三阶段选中的对比，生成结构化观察、计数及页面就绪度。这些是响应契约，不是数据库模型。质量请求不修改当前指标、历史或机会，也不回填缺失观察。
+
+Snapshot IDs and run IDs support factual evidence about dates, missing metrics, repeated date bounds, overlap, and strict import chronology. However, the schema has no per-metric source ID on `WebsitePage`, may lack pre-Phase-3 history, and cannot track manual/direct SQL edits. Matching current values to a snapshot does not prove their origin. Therefore `current_state_not_single_snapshot` is not emitted.
+快照 ID 与导入 ID 支持关于日期、缺失指标、重复日期范围、重叠及严格导入时间顺序的事实证据。但是，数据库结构没有 `WebsitePage` 的逐指标来源 ID，可能缺少第三阶段之前的历史，也无法追踪手动或直接 SQL 编辑。当前值与快照匹配不能证明其来源。因此不生成 `current_state_not_single_snapshot`。
+
+Import grouping by source/type/window and dates does not establish the same GSC property or identical filter scope. Page observations are scoped by actual `page_id`, but neither import nor page readiness proves export completeness, source accuracy, full 28-day coverage, or matching report filters. See [data-quality.md](data-quality.md) for the exact deterministic rules and their evidence boundaries.
+按来源、类型、窗口与日期将导入分组，不能证明同一 GSC 属性或相同筛选范围。页面观察按实际 `page_id` 限定，但导入或页面就绪度都不能证明导出完整性、来源准确性、完整 28 天覆盖或报告筛选一致。明确的确定性规则及证据边界详见 [data-quality.md](data-quality.md)。
 
 ## Deliberate limits / 当前限制
 

@@ -150,5 +150,8 @@ Uploads are read in memory or framework-managed ephemeral upload storage; the ap
 Apply migration `0002_import_history` before using Phase 3. `WebsitePage` remains latest applied state; snapshots now preserve each new successful import's source observations and known dates. Existing Phase 2 imports have no fabricated history. There is no per-site ownership model. Unknown dates cannot be used in period comparisons; observed bounds alone do not prove complete 28-day coverage. Blank current-page updates can mix observations from different uploads, and out-of-order uploads can make current state differ from the latest reporting period. See [data-model.md](data-model.md) and [performance-history.md](performance-history.md) for these limits.
 使用第三阶段前请应用迁移 `0002_import_history`。`WebsitePage` 仍为最近应用的状态；快照现保留每个新的成功导入的来源观察及已知日期。不为已有第二阶段导入编造历史。没有站点归属模型。未知日期不能用于时间段对比；仅观察起止日期不能证明完整 28 天覆盖。当前页面的空白更新可能混合不同上传的观察，乱序上传可能使当前状态与最新报告时间段不同。这些限制详见 [data-model.md](data-model.md) 与 [performance-history.md](performance-history.md)。
 
-Phase 3 adds descriptive comparisons only. It contains no SEO judgments, scoring, opportunities, recommendations, AI, GSC API integration, query import, editing/deletion, background jobs, or execution. Phase 4 has not started.
-第三阶段仅增加描述性对比。不包含 SEO 判断、评分、机会、建议、AI、GSC API 集成、查询导入、编辑删除、后台任务或执行。第四阶段尚未开始。
+Phase 4 adds runtime quality observations after import, without changing validation, preview, atomic persistence, or duplicate handling. A `blocking` quality observation means comparison evidence is unavailable; it does not retroactively invalidate a successful import or prevent a valid upload. No new migration or observation persistence is required. See [data-quality.md](data-quality.md) for readiness and evidence limitations.
+第四阶段在导入后增加运行时质量观察，不改变校验、预览、原子持久化或重复处理。`blocking` 质量观察表示对比证据不可用，不会追溯否定成功导入或阻止有效上传。无需新增迁移或观察持久化。就绪度及证据限制详见 [data-quality.md](data-quality.md)。
+
+Phase 4 contains no SEO judgments, scoring, opportunities, recommendations, AI, GSC API integration, query import, editing/deletion, background jobs, or execution. Phase 5 has not started.
+第四阶段不包含 SEO 判断、评分、机会、建议、AI、GSC API 集成、查询导入、编辑删除、后台任务或执行。第五阶段尚未开始。

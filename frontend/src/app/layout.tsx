@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SEO Tool · Phase 3",
+  title: "SEO Tool · Phase 4",
   description: "SEO Tool development foundation / SEO Tool 开发基础",
 };
 

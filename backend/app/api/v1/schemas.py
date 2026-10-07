@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, JsonValue, computed_field
 
 
 class ImportResult(BaseModel):
@@ -114,6 +114,48 @@ class PerformanceComparisonResponse(BaseModel):
     average_position_change: Decimal | None
 
 
+class QualityObservationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    severity: Literal["info", "warning", "blocking"]
+    scope: Literal["page", "import"]
+    message: str
+    snapshot_ids: list[UUID]
+    import_run_ids: list[UUID]
+    evidence: dict[str, JsonValue]
+
+
+class PageQualityCounts(BaseModel):
+    total_snapshots: int
+    exact_date_snapshots: int
+    unknown_date_snapshots: int
+    snapshots_with_missing_metrics: int
+    distinct_exact_periods: int
+    revision_periods: int
+    compatible_exact_periods: int
+
+
+class PageQualityResponse(BaseModel):
+    """Expose runtime evidence readiness without persisting observations or SEO judgments.
+    提供运行时证据就绪状态，不持久化观察结果或 SEO 判断。
+    """
+
+    page_id: UUID
+    readiness: Literal["insufficient", "limited", "ready"]
+    observations: list[QualityObservationResponse]
+    counts: PageQualityCounts
+    comparison_exists: bool
+    selected_snapshot_ids: list[UUID]
+    readiness_reasons: list[str]
+
+
+class ImportQualityResponse(BaseModel):
+    import_run_id: UUID
+    observations: list[QualityObservationResponse]
+    counts: dict[str, int]
+
+
 class PagePerformanceHistory(BaseModel):
     current_page: WebsitePageResponse
     items: list[PerformanceSnapshotResponse]
@@ -123,3 +165,4 @@ class PagePerformanceHistory(BaseModel):
     total_pages: int
     comparison: PerformanceComparisonResponse | None
     comparison_unavailable_reason: str | None
+    quality: PageQualityResponse

@@ -1,7 +1,7 @@
 # SEO Tool
 
-An AI-assisted SEO operations system. Phase 1 provides the foundation; Phase 2 adds manual GSC Pages imports; Phase 3 adds successful-import history, per-page performance snapshots, and deterministic reporting-period comparisons.
-由 AI 辅助的 SEO 运营系统。第一阶段提供基础框架；第二阶段增加手动 GSC 网页导入；第三阶段增加成功导入历史、逐页性能快照及确定性的报告时间段对比。
+An AI-assisted SEO operations system. Phase 1 provides the foundation; Phase 2 adds manual GSC Pages imports; Phase 3 adds history and reporting-period comparisons; Phase 4 adds deterministic, read-only data-quality observations and evidence readiness.
+由 AI 辅助的 SEO 运营系统。第一阶段提供基础框架；第二阶段增加手动 GSC 网页导入；第三阶段增加历史与报告时间段对比；第四阶段增加确定性的只读数据质量观察及证据就绪度。
 
 Long-term workflow: `DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`.
 长期流程：`DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`。
@@ -49,8 +49,8 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000> for the development health page, <http://localhost:3000/imports/gsc> to preview and confirm a GSC import, <http://localhost:3000/imports/history> for successful imports, and <http://localhost:3000/pages> for the read-only page list. Open a page from that list to see `/pages/[id]`, including its current metrics, snapshots, and available comparison. API documentation is at <http://localhost:8000/docs>.
-打开 <http://localhost:3000> 查看开发健康检查页面，打开 <http://localhost:3000/imports/gsc> 预览并确认 GSC 导入，打开 <http://localhost:3000/imports/history> 查看成功导入，打开 <http://localhost:3000/pages> 查看只读页面列表。从列表打开页面可查看 `/pages/[id]`，包括当前指标、快照及可用对比。API 文档位于 <http://localhost:8000/docs>。
+Open <http://localhost:3000> for the development health page, <http://localhost:3000/imports/gsc> to preview and confirm a GSC import, <http://localhost:3000/imports/history> for successful imports, and <http://localhost:3000/pages> for the read-only page list. Open a page from that list to see `/pages/[id]`, including current metrics, snapshots, comparison, and data-quality observations. API documentation is at <http://localhost:8000/docs>.
+打开 <http://localhost:3000> 查看开发健康检查页面，打开 <http://localhost:3000/imports/gsc> 预览并确认 GSC 导入，打开 <http://localhost:3000/imports/history> 查看成功导入，打开 <http://localhost:3000/pages> 查看只读页面列表。从列表打开页面可查看 `/pages/[id]`，包括当前指标、快照、对比及数据质量观察。API 文档位于 <http://localhost:8000/docs>。
 
 ```sh
 curl http://localhost:8000/api/v1/health
@@ -64,6 +64,9 @@ If you change the database credentials or port in the root `.env`, update `DATAB
 
 For an existing PostgreSQL instance, skip Compose, set `DATABASE_URL`, and apply the Alembic migrations. The applications run on the host. Phase 3 adds revision `0002_import_history`: run `uv run alembic upgrade head` before using apply or history APIs. It adds history tables without changing existing page data or inventing history for earlier imports.
 使用已有 PostgreSQL 实例时，可跳过 Compose，设置 `DATABASE_URL` 并执行 Alembic 迁移。应用在宿主机上运行。第三阶段增加修订 `0002_import_history`：使用应用或历史 API 前，请运行 `uv run alembic upgrade head`。它增加历史表，不改变已有页面数据，也不为此前导入编造历史。
+
+Phase 4 requires no new migration: `0002_import_history` remains the schema head. Quality observations are calculated at request time from existing history and are not persisted.
+第四阶段无需新增迁移：`0002_import_history` 仍为数据库结构最新修订。质量观察在请求时根据已有历史计算，不持久化。
 
 ## GSC import / GSC 导入
 
@@ -81,6 +84,17 @@ XLSX 日期工作表可提供准确的已观察报告起止日期；不可用或
 
 Uploads are limited to 5 MiB and 10,000 data rows. This is a local development workflow with no authentication. See [the GSC import contract](docs/gsc-import.md) for supported headers, reporting-window behavior, normalization, API requests, and current limitations.
 上传限制为 5 MiB 与 10,000 个数据行。这是没有身份认证的本地开发流程。支持的列名、报告窗口行为、标准化、API 请求及当前限制详见 [GSC 导入契约](docs/gsc-import.md)。
+
+## Data quality / 数据质量
+
+The page history view shows `insufficient`, `limited`, or `ready` data readiness with structured factual observations. Quality reuses the selected Phase 3 comparison; it does not recalculate changes, fill missing metrics, mutate history, or create `SEOOpportunity` records. Readiness describes the evidence available for descriptive comparison, without an SEO score or action.
+页面历史视图显示 `insufficient`、`limited` 或 `ready` 数据就绪度及结构化事实观察。质量复用第三阶段选中的对比，不重新计算变化、不填补缺失指标、不修改历史，也不创建 `SEOOpportunity` 记录。就绪度描述可用于描述性对比的证据，不包含 SEO 评分或行动。
+
+No compatible exact-period comparison means `insufficient`. A selected comparison with overlap, missing metrics, a known zero count baseline, or relevant out-of-order import evidence is `limited`; otherwise it is `ready`. Caveats outside the selected pair remain visible without automatically lowering readiness. Same-period revisions alone are informational.
+没有兼容准确时间段对比时为 `insufficient`。选中的对比存在重叠、缺失指标、已知零计数基准或相关乱序导入证据时为 `limited`；否则为 `ready`。所选对之外的限制仍可见，但不会自动降低就绪度。仅有同时间段修订属于信息提示。
+
+Read-only APIs are `GET /api/v1/pages/{page_id}/quality` and `GET /api/v1/imports/{import_run_id}/quality`; the existing page-performance response also embeds page quality. Import quality reports facts without a page-readiness state. Stable codes, evidence fields, severity semantics, and provenance limits are in [data-quality.md](docs/data-quality.md).
+只读 API 为 `GET /api/v1/pages/{page_id}/quality` 与 `GET /api/v1/imports/{import_run_id}/quality`；现有页面性能响应也内嵌页面质量。导入质量报告事实，不包含页面就绪度状态。稳定代码、证据字段、严重程度语义及来源追踪限制详见 [data-quality.md](docs/data-quality.md)。
 
 ## Checks / 检查
 
@@ -122,14 +136,15 @@ docs/architecture.md  Component boundaries and current scope / 模块边界与�
 docs/data-model.md    PostgreSQL fields and preservation rules / 字段与保留规则
 docs/gsc-import.md    GSC formats, normalization, workflow, APIs / 格式、标准化、流程、API
 docs/performance-history.md  History, dates, comparisons, limits / 历史、日期、对比、限制
+docs/data-quality.md   Runtime observations and evidence readiness / 运行时观察与证据就绪度
 compose.yaml          Local PostgreSQL service only / 仅本地 PostgreSQL 服务
 ```
 
-Imports and normalization implement the GSC file workflow. The analysis boundary now contains deterministic performance comparison, separate from source parsing. Scoring, decisions, AI reasoning, and execution remain reserved modules. Phase 3 does not implement SEO judgments or recommendations, GSC/GA4 API integrations, AI calls, background jobs, autonomous actions, or production deployment.
-导入与标准化模块实现 GSC 文件流程。分析边界现包含确定性的性能对比，与数据源解析分离。评分、决策、AI 推理及执行仍为预留模块。第三阶段不实现 SEO 判断或建议、GSC/GA4 API 集成、AI 调用、后台任务、自主行动或生产部署。
+Imports and normalization implement the GSC file workflow. The analysis boundary contains separate deterministic performance-comparison and data-quality modules, independent of source parsing. Scoring, decisions, AI reasoning, and execution remain reserved modules. Phase 4 does not implement SEO judgments or recommendations, GSC/GA4 API integrations, AI calls, background jobs, autonomous actions, or production deployment.
+导入与标准化模块实现 GSC 文件流程。分析边界包含独立的确定性性能对比与数据质量模块，与来源解析分离。评分、决策、AI 推理及执行仍为预留模块。第四阶段不实现 SEO 判断或建议、GSC/GA4 API 集成、AI 调用、后台任务、自主行动或生产部署。
 
-Read [architecture](docs/architecture.md), [data model](docs/data-model.md), [GSC import](docs/gsc-import.md), [performance history](docs/performance-history.md), and [agent instructions](AGENTS.md) before extending the application. Important documentation and non-trivial code comments/docstrings use English first, Chinese second.
-扩展应用之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)、[GSC 导入文档](docs/gsc-import.md)、[性能历史文档](docs/performance-history.md)和[代理开发指南](AGENTS.md)。重要文档及非简单代码注释、文档字符串使用英文在前、中文在后的双语形式。
+Read [architecture](docs/architecture.md), [data model](docs/data-model.md), [GSC import](docs/gsc-import.md), [performance history](docs/performance-history.md), [data quality](docs/data-quality.md), and [agent instructions](AGENTS.md) before extending the application. Important documentation and non-trivial code comments/docstrings use English first, Chinese second.
+扩展应用之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)、[GSC 导入文档](docs/gsc-import.md)、[性能历史文档](docs/performance-history.md)、[数据质量文档](docs/data-quality.md)和[代理开发指南](AGENTS.md)。重要文档及非简单代码注释、文档字符串使用英文在前、中文在后的双语形式。
 
 To stop the local database while retaining its data, run `docker compose down` from the repository root.
 如需停止本地数据库并保留数据，请从仓库根目录运行 `docker compose down`。

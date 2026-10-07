@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <main>
       <header>
-        <p className="eyebrow">Phase 3 · Development interface / 第三阶段 · 开发界面</p>
+        <p className="eyebrow">Phase 4 · Development interface / 第四阶段 · 开发界面</p>
         <h1>SEO Tool</h1>
         <p className="intro">
           Import, validate, and view Google Search Console page data.
