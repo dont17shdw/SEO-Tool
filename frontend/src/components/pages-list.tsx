@@ -67,7 +67,7 @@ export function PagesList() {
       {error && <p className="notice error" role="alert">{error}</p>}
       {!loading && !error && data && (
         <>
-          {data.items.length > 0 ? <PageMetricsTable rows={data.items} /> : (
+          {data.items.length > 0 ? <PageMetricsTable rows={data.items} linkToHistory /> : (
             <p>No pages on this page. <Link href="/imports/gsc">Import a GSC report</Link>. 本页没有记录。请先导入 GSC 报告。</p>
           )}
           <div className="pagination" aria-label="Pagination / 分页">

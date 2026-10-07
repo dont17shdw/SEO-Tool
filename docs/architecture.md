@@ -2,11 +2,11 @@
 
 ## Scope / 范围
 
-Phase 1 established the Next.js frontend, FastAPI backend, PostgreSQL models, and Alembic migration. Phase 2 adds one complete manual Google Search Console (GSC) Pages import flow and a paginated, read-only page view.
-第一阶段建立 Next.js 前端、FastAPI 后端、PostgreSQL 模型及 Alembic 迁移。第二阶段增加一条完整的手动 Google Search Console（GSC）网页导入流程，以及分页的只读页面视图。
+Phase 1 established the Next.js frontend, FastAPI backend, PostgreSQL models, and Alembic migration. Phase 2 added manual Google Search Console (GSC) Pages imports. Phase 3 adds successful-import tracking, per-page historical snapshots, and deterministic comparisons between compatible reporting periods.
+第一阶段建立 Next.js 前端、FastAPI 后端、PostgreSQL 模型及 Alembic 迁移。第二阶段增加手动 Google Search Console（GSC）网页导入。第三阶段增加成功导入追踪、逐页历史快照及兼容报告时间段之间的确定性对比。
 
-The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**. V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. Phase 2 implements only **GSC FILE → PARSE → VALIDATE → NORMALIZE → PREVIEW → PERSIST → VIEW**. Analysis, scoring, recommendations, AI reasoning, and execution remain unimplemented.
-长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**。V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。第二阶段仅实现 **GSC FILE → PARSE → VALIDATE → NORMALIZE → PREVIEW → PERSIST → VIEW**。分析、评分、建议、AI 推理及执行仍未实现。
+The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**. V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. The current import flow remains **GSC FILE → PARSE → VALIDATE → NORMALIZE → PREVIEW → PERSIST → VIEW**, with **IMPORT HISTORY → PAGE PERFORMANCE SNAPSHOTS → PERIOD COMPARISON** added. Comparisons describe data; SEO judgments, scoring, recommendations, AI reasoning, and execution remain unimplemented.
+长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**。V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。当前导入流程仍为 **GSC FILE → PARSE → VALIDATE → NORMALIZE → PREVIEW → PERSIST → VIEW**，新增 **IMPORT HISTORY → PAGE PERFORMANCE SNAPSHOTS → PERIOD COMPARISON**。对比描述数据；SEO 判断、评分、建议、AI 推理及执行仍未实现。
 
 ## Local runtime / 本地运行架构
 
@@ -15,7 +15,9 @@ Browser / 浏览器
   └── Next.js + React + TypeScript
         ├── /                     Development and health page / 开发与健康检查页面
         ├── /imports/gsc          File preview and confirmation / 文件预览与确认
-        └── /pages                Paginated page metrics / 分页页面指标
+        ├── /imports/history      Successful import history / 成功导入历史
+        ├── /pages                Paginated page metrics / 分页页面指标
+        └── /pages/[id]           Snapshots and comparison / 快照与对比
               └── FastAPI /api/v1
                     ├── Health / 健康检查
                     ├── GSC parsing and normalization / GSC 解析与标准化
@@ -35,9 +37,9 @@ backend/app/
   config/                   Environment settings / 环境配置
   db/                       SQLAlchemy sessions and base metadata / 会话与基础元数据
   models/                   Persistent records / 持久化记录
-  imports/gsc/              GSC mapping, parsing, preview, persistence / GSC 映射、解析、预览、持久化
+  imports/gsc/              GSC mapping, parsing, dates, persistence / GSC 映射、解析、日期、持久化
   normalization/            Deterministic URL and metric validation / 确定性 URL 与指标校验
-  analysis/                 Reserved observations boundary / 预留观察结果边界
+  analysis/                 Deterministic performance comparison / 确定性性能对比
   scoring/                  Reserved calculations boundary / 预留评分计算边界
   decision_engine/          Reserved prioritization boundary / 预留优先级边界
   ai/                       Reserved semantic reasoning boundary / 预留语义推理边界
@@ -54,21 +56,23 @@ docs/                       Bilingual contracts and setup guidance / 双语契�
   **标准化：** 校验绝对 HTTP(S) URL 与指标值，去除前后空白，并生成现有模型的四个 GSC 字段。缺失指标保持未知；标准化不推导 SEO 分类，也不重写 URL。
 - **API:** Routes handle bounded multipart uploads, typed responses, explicit confirmation, and useful public errors. They delegate source processing and database persistence to the import modules.
   **API：** 路由处理有大小限制的 multipart 上传、带类型响应、显式确认及易理解的公开错误。它们将数据源处理与数据库持久化委托给导入模块。
-- **Persistence:** The import service upserts exact stored URL strings within one transaction. The models define database integrity without parsing files or making SEO judgments.
-  **持久化：** 导入服务在一个事务内按实际存储的 URL 字符串执行新增或更新。模型负责数据库完整性，不解析文件，也不进行 SEO 判断。
-- **Future processing:** Analysis, scoring, decision-making, AI reasoning, and execution remain separate. Deterministic code should perform calculations. Future AI provider details belong behind the AI boundary; recommendations must not cause external actions automatically.
-  **未来处理：** 分析、评分、决策、AI 推理与执行保持独立。计算应使用确定性代码。未来 AI 供应商细节属于 AI 边界内部；建议不得自动触发外部行动。
+- **Persistence:** One transaction upserts exact stored URLs, records the successful import, and creates snapshots of normalized source values. The current page can preserve a metric omitted from this upload; its snapshot must record that omission as `NULL`. Models define integrity without parsing files or making SEO judgments.
+  **持久化：** 一个事务按精确存储的 URL 新增或更新、记录成功导入，并创建标准化来源值的快照。当前页面可保留本次上传未提供的指标；其快照必须将该缺失记录为 `NULL`。模型负责完整性，不解析文件，也不进行 SEO 判断。
+- **Analysis:** Source-independent comparison logic selects compatible dated snapshots and calculates descriptive changes using deterministic decimal arithmetic. It neither updates metrics nor generates opportunities.
+  **分析：** 与数据源无关的对比逻辑选择具有兼容日期的快照，并使用确定性十进制计算描述性变化。它既不更新指标，也不生成机会。
+- **Future processing:** Scoring, decision-making, AI reasoning, and execution remain separate. Future AI provider details belong behind the AI boundary; recommendations must not cause external actions automatically.
+  **未来处理：** 评分、决策、AI 推理与执行保持独立。未来 AI 供应商细节属于 AI 边界内部；建议不得自动触发外部行动。
 
 ## Preview and confirmation / 预览与确认
 
-Preview parses and validates the upload without opening a database session or writing records. It reports source, worksheet, column mapping, row counts, errors, and normalized samples. Mapping and validation use deterministic code without AI.
-预览解析并校验上传文件，不打开数据库会话，也不写入记录。它报告数据源、工作表、列映射、行数、错误及标准化样本。映射与校验使用确定性代码，不使用 AI。
+Preview parses and validates the upload without opening a database session or writing records. It reports source, worksheet, reporting endpoints/status, column mapping, row counts, errors, and normalized samples. Mapping, date extraction, and validation use deterministic code without AI.
+预览解析并校验上传文件，不打开数据库会话，也不写入记录。它报告数据源、工作表、报告起止日期与状态、列映射、行数、错误及标准化样本。映射、日期提取与校验使用确定性代码，不使用 AI。
 
 The browser retains the selected file. Confirmation submits that file again with `confirmed=true` and the returned `preview_hash`. The backend re-parses the entire upload and verifies its fingerprint before persistence; it does not trust client-provided normalized rows. Invalid rows or duplicate URLs block the entire import. No partial valid-row import is performed.
 浏览器保留选中的文件。确认时再次提交该文件，并附带 `confirmed=true` 与返回的 `preview_hash`。后端在持久化前重新解析整个上传内容并校验指纹，不信任客户端提供的标准化行。无效行或重复 URL 会阻止整个导入；不会仅导入其中的有效行。
 
-The hash binds confirmation to the previewed file; it is not authentication, authorization, an import history, or a persistent server-side token. Re-submitting an unchanged file is safe: existing unchanged records are reported as skipped.
-哈希将确认绑定到已预览的文件；它不是身份认证、权限控制、导入历史或持久化的服务端令牌。重新提交相同文件是安全的：未发生变化的已有记录会计为跳过。
+The hash binds confirmation to the previewed bytes and is also the unique identity of a successful `ImportRun`. Applying already-imported identical bytes returns the original import ID and skips every row without updating pages or creating history again. Different bytes are a new import even when the filename is unchanged. The fingerprint is not authentication, authorization, or a server-side preview session.
+哈希将确认绑定到已预览的字节，也是成功 `ImportRun` 的唯一标识。应用已导入的相同字节会返回原导入 ID 并跳过每行，不更新页面，也不再次创建历史。字节不同即为新导入，即使文件名不变。指纹不是身份认证、权限控制或服务端预览会话。
 
 See [gsc-import.md](gsc-import.md) for aliases, reporting-window checks, normalization, limits, request examples, and duplicate semantics.
 列名别名、报告窗口检查、标准化、限制、请求示例与重复数据语义详见 [gsc-import.md](gsc-import.md)。
@@ -81,6 +85,8 @@ See [gsc-import.md](gsc-import.md) for aliases, reporting-window checks, normali
 | `POST /api/v1/imports/gsc/pages/preview` | Validate a CSV/XLSX upload; no persistence.<br>校验 CSV/XLSX 上传；不持久化。 |
 | `POST /api/v1/imports/gsc/pages/apply` | Revalidate and atomically persist an explicitly confirmed file.<br>重新校验并原子持久化已显式确认的文件。 |
 | `GET /api/v1/pages` | Read-only page metrics with basic pagination.<br>提供基本分页的只读页面指标。 |
+| `GET /api/v1/imports` | Successful import history with pagination.<br>提供分页的成功导入历史。 |
+| `GET /api/v1/pages/{page_id}/performance` | Current page, paginated chronological snapshots, and an independently selected compatible comparison.<br>当前页面、分页且按导入时间排序的快照，以及独立选择的兼容对比。 |
 
 The health response remains `{"status":"ok","service":"seo-tool-api"}`. It confirms the API process can serve requests, not that PostgreSQL is ready. FastAPI's `/docs` describes the implemented request and response contracts. There are no page editing/deletion endpoints or opportunity APIs.
 健康检查响应仍为 `{"status":"ok","service":"seo-tool-api"}`。它确认 API 进程能处理请求，不能证明 PostgreSQL 已就绪。FastAPI 的 `/docs` 描述已实现的请求与响应契约。当前没有页面编辑、删除接口或机会 API。
@@ -90,11 +96,14 @@ The browser calls the backend directly through `NEXT_PUBLIC_API_BASE_URL`, defau
 
 ## Schema and reporting windows / 数据库结构与报告窗口
 
-Phase 2 needs no new migration: the Phase 1 `WebsitePage` model already contains `clicks_28d`, `impressions_28d`, `ctr`, and `average_position`. PostgreSQL still stores `website_pages` and `seo_opportunities`; Phase 2 does not create opportunities. Schema changes remain explicit Alembic migrations, never automatic application-startup changes.
-第二阶段无需新增迁移：第一阶段的 `WebsitePage` 模型已包含 `clicks_28d`、`impressions_28d`、`ctr` 与 `average_position`。PostgreSQL 仍存储 `website_pages` 与 `seo_opportunities`；第二阶段不创建机会。数据库结构变化仍由显式 Alembic 迁移管理，不能在应用启动时自动变更。
+Revision `0002_import_history` adds `import_runs` and `page_performance_snapshots`, with foreign keys, uniqueness, integrity checks, and history/reporting-period indexes. `website_pages` and `seo_opportunities` remain intact. Earlier page data is preserved without fabricated historical backfill. Schema changes remain explicit Alembic migrations, never automatic application-startup changes.
+修订 `0002_import_history` 增加 `import_runs` 与 `page_performance_snapshots`，包含外键、唯一性、完整性检查及历史与报告时间段索引。`website_pages` 与 `seo_opportunities` 保持不变。此前页面数据保留，不编造历史回填。数据库结构变化仍由显式 Alembic 迁移管理，不能在应用启动时自动变更。
 
-The supported import window is the latest 28 days. CSV has no workbook filter metadata, so the user must select that period before exporting. Supported XLSX filter metadata is validated when present. The database stores the latest supplied values, without observation-date anchors, import history, or dated snapshots; repeatedly uploading different files can replace prior metrics. See [data-model.md](data-model.md) for the exact write boundary and preservation rules.
-支持的导入窗口为最近 28 天。CSV 不包含工作簿筛选元数据，因此用户必须在导出前选择该时间段。XLSX 存在受支持的筛选元数据时会进行校验。数据库存储最新提供的指标，没有观察日期基准、导入历史或带日期的快照；多次上传不同文件可能替换此前指标。明确的写入边界与保留规则详见 [data-model.md](data-model.md)。
+The supported import window remains latest 28 days. XLSX date worksheets can provide observed period endpoints; missing, malformed, or conflicting evidence produces `NULL` endpoints and `period_status="unknown"` while still allowing the page import. Dates are never inferred from filenames or import timestamps. Observed endpoints do not certify full 28-day coverage. See [performance-history.md](performance-history.md) for extraction, comparison selection, and missing-data semantics.
+支持的导入窗口仍为最近 28 天。XLSX 日期工作表可提供已观察的时间段起止日期；缺失、损坏或冲突的证据会产生 `NULL` 起止日期及 `period_status="unknown"`，仍允许导入页面。绝不从文件名或导入时间推导日期。已观察的起止日期不能证明完整的 28 天覆盖。提取、对比选择及缺失数据语义详见 [performance-history.md](performance-history.md)。
+
+The three write targets commit atomically. Only completed imports are retained; validation, preview, and failed persistence do not create history. Snapshot/history failure rolls back current-page updates too. `WebsitePage` is the latest successfully applied nonblank state, which may mix uploads or represent an older report uploaded later. Comparison instead uses compatible report dates and raw snapshot metrics; it is independent of the history pagination page.
+三个写入目标原子提交。仅保留已完成导入；校验、预览及失败的持久化不创建历史。快照或历史失败也会回滚当前页面更新。`WebsitePage` 是最近成功应用的非空白状态，可能混合多个上传，或代表后来上传的较早报告。对比则使用兼容报告日期及原始快照指标，与历史分页所在页独立。
 
 ## Configuration and limits / 配置与限制
 
@@ -104,10 +113,10 @@ Keep real credentials and environment files outside Git. `DATABASE_URL` uses `po
 Uploads are bounded to 5 MiB and 10,000 data rows. Preview returns at most 100 validation errors and 10 normalized samples while retaining full row counts. Source uploads are processed ephemerally and must not be committed; automated tests generate synthetic files. This is a local development interface without authentication or a production deployment plan.
 上传限制为 5 MiB 与 10,000 个数据行。预览最多返回 100 个校验错误与 10 个标准化样本，同时保留完整行数统计。源上传文件仅作临时处理，不得提交；自动化测试生成合成文件。这是没有身份认证或生产部署方案的本地开发界面。
 
-Phase 2 does not include GSC/GA4 APIs, query-level imports, indexing reports, analysis, scoring, opportunity generation, a Decision Engine, AI calls, content generation, WordPress, outreach, background jobs, or autonomous actions.
-第二阶段不包含 GSC/GA4 API、查询级导入、索引报告、分析、评分、机会生成、决策引擎、AI 调用、内容生成、WordPress、外链联系、后台任务或自主行动。
+Phase 3 does not include GSC/GA4 APIs, query-level imports, indexing reports, SEO judgments, scoring, opportunity generation, a Decision Engine, AI calls, content generation, WordPress, outreach, background jobs, or autonomous actions.
+第三阶段不包含 GSC/GA4 API、查询级导入、索引报告、SEO 判断、评分、机会生成、决策引擎、AI 调用、内容生成、WordPress、外链联系、后台任务或自主行动。
 
-## Suggested Phase 3 / 建议的第三阶段
+## Suggested Phase 4 / 建议的第四阶段
 
-Add deterministic, read-only data-quality and latest-28-day observations with explicit evidence and missing-data handling. Define the evidence required for any later recommendation rules before implementing them. Current imports do not provide previous-period or seven-day metrics, so they cannot support reliable trend comparisons. Do not expand this into a full Decision Engine, scoring system, AI integration, or execution. Phase 3 has not started.
-增加确定性的只读数据质量检查与最近 28 天观察结果，明确证据及缺失数据的处理方式。在实现后续建议规则之前，先定义其所需证据。当前导入不提供前一时间段或七天指标，因此无法支持可靠的趋势对比。不要将其扩展为完整的决策引擎、评分系统、AI 集成或执行功能。第三阶段尚未开始。
+Add deterministic, read-only data-quality observations about missing metrics, unknown dates, period overlap, and available reporting evidence. Define requirements for later recommendation rules separately. Keep observations descriptive and test their evidence, without adding scores, a Decision Engine, AI, or execution. Phase 4 has not started.
+增加关于缺失指标、未知日期、时间段重叠及可用报告证据的确定性只读数据质量观察。单独定义后续建议规则的要求。保持观察的描述性并测试其证据，不增加评分、决策引擎、AI 或执行。第四阶段尚未开始。

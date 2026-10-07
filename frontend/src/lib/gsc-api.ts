@@ -11,6 +11,9 @@ export type PageMetrics = {
 export type ImportPreview = {
   source: "gsc_pages";
   reporting_window: "latest_28_days";
+  period_start: string | null;
+  period_end: string | null;
+  period_status: "exact" | "unknown";
   detected_sheet: string | null;
   total_rows: number;
   valid_rows: number;
@@ -28,6 +31,8 @@ export type ImportResult = {
   updated_count: number;
   skipped_count: number;
   error_count: number;
+  import_run_id: string;
+  already_processed: boolean;
 };
 
 export type PagesResponse = {
@@ -38,11 +43,11 @@ export type PagesResponse = {
   total_pages: number;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isCount(value: unknown): value is number {
+export function isCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
@@ -60,7 +65,7 @@ function isMetric(value: unknown): boolean {
  * Validate nullable database metrics at the browser boundary, including fraction-based CTR.
  * 在浏览器边界验证可空数据库指标，包括以比例存储的 CTR。
  */
-function isPageMetrics(value: unknown): boolean {
+export function isPageMetrics(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.url === "string" &&
@@ -76,7 +81,7 @@ function isPageMetrics(value: unknown): boolean {
  * Read a JSON response and surface the API's human-readable error without a stack trace.
  * 读取 JSON 响应，并显示 API 提供的可读错误，不暴露堆栈信息。
  */
-async function requestJson(path: string, options: RequestInit): Promise<unknown> {
+export async function requestJson(path: string, options: RequestInit): Promise<unknown> {
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
     ...options,
     cache: "no-store",
@@ -112,6 +117,7 @@ export async function previewGscFile(file: File, signal: AbortSignal): Promise<I
     !isRecord(payload) ||
     payload.source !== "gsc_pages" ||
     payload.reporting_window !== "latest_28_days" ||
+    !isReportingPeriod(payload) ||
     !(payload.detected_sheet === null || typeof payload.detected_sheet === "string") ||
     ![payload.total_rows, payload.valid_rows, payload.invalid_rows, payload.duplicate_rows].every(isCount) ||
     !isRecord(payload.column_mapping) ||
@@ -154,7 +160,9 @@ export async function applyGscFile(
   const payload = await requestJson("/imports/gsc/pages/apply", { method: "POST", body, signal });
   if (
     !isRecord(payload) ||
-    ![payload.created_count, payload.updated_count, payload.skipped_count, payload.error_count].every(isCount)
+    ![payload.created_count, payload.updated_count, payload.skipped_count, payload.error_count].every(isCount) ||
+    typeof payload.import_run_id !== "string" ||
+    typeof payload.already_processed !== "boolean"
   ) {
     throw new Error("Unexpected import result response. 导入结果响应格式不符合预期。");
   }
@@ -203,4 +211,17 @@ export function formatMetric(value: string | number | null, percentage = false):
   if (value === null) return "—";
   const number = Number(value) * (percentage ? 100 : 1);
   return `${new Intl.NumberFormat("en", { maximumFractionDigits: 4 }).format(number)}${percentage ? "%" : ""}`;
+}
+
+/**
+ * Exact report dates must be paired; unknown dates must remain explicitly absent.
+ * 精确报告日期必须成对存在；未知日期必须保持明确缺失。
+ */
+export function isReportingPeriod(value: Record<string, unknown>): boolean {
+  return value.period_status === "unknown"
+    ? value.period_start === null && value.period_end === null
+    : value.period_status === "exact" &&
+        typeof value.period_start === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.period_start) &&
+        typeof value.period_end === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.period_end) &&
+        value.period_start <= value.period_end;
 }

@@ -1,11 +1,14 @@
 import { formatMetric, type PageMetrics } from "@/lib/gsc-api";
+import Link from "next/link";
 
 export function PageMetricsTable({
   rows,
   showRowNumber = false,
+  linkToHistory = false,
 }: {
   rows: (PageMetrics & { row?: number; id?: string })[];
   showRowNumber?: boolean;
+  linkToHistory?: boolean;
 }) {
   return (
     <div className="table-scroll" tabIndex={0} role="region" aria-label="Page metrics / 页面指标">
@@ -24,7 +27,7 @@ export function PageMetricsTable({
           {rows.map((row) => (
             <tr key={row.id ?? row.row ?? row.url}>
               {showRowNumber && <td>{row.row}</td>}
-              <td className="url-cell">{row.url}</td>
+              <td className="url-cell">{linkToHistory && row.id ? <Link href={`/pages/${row.id}`}>{row.url}<br /><small>View history / 查看历史 →</small></Link> : row.url}</td>
               <td>{formatMetric(row.clicks_28d)}</td>
               <td>{formatMetric(row.impressions_28d)}</td>
               <td>{formatMetric(row.ctr, true)}</td>

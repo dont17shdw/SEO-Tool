@@ -111,14 +111,15 @@ def test_preview_does_not_persist_then_confirmed_apply_creates_and_reimport_skip
     data = {"confirmed": "true", "preview_hash": preview["preview_hash"]}
     response = api_client.post(APPLY_PATH, files=upload(content), data=data)
     assert response.status_code == 200
-    assert response.json() == {
-        "created_count": 1,
-        "updated_count": 0,
-        "skipped_count": 0,
-        "error_count": 0,
-    }
+    saved = response.json()
+    assert saved["created_count"] == 1
+    assert saved["updated_count"] == saved["skipped_count"] == saved["error_count"] == 0
+    assert saved["already_processed"] is False
+    assert UUID(saved["import_run_id"])
     repeated = api_client.post(APPLY_PATH, files=upload(content), data=data)
     assert repeated.json()["skipped_count"] == 1
+    assert repeated.json()["already_processed"] is True
+    assert repeated.json()["import_run_id"] == saved["import_run_id"]
     pages = api_client.get("/api/v1/pages").json()
     assert pages["total"] == 1
     assert pages["items"][0]["clicks_28d"] == 10

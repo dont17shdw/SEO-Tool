@@ -96,9 +96,7 @@ def apply_pages(
     仅在确认并完成校验后，使用一个事务持久化数据。
     """
     try:
-        return ImportResult.model_validate(
-            persist_gsc_pages(session, parsed.rows), from_attributes=True
-        )
+        return ImportResult.model_validate(persist_gsc_pages(session, parsed), from_attributes=True)
     except SQLAlchemyError:
         raise HTTPException(
             status_code=503,

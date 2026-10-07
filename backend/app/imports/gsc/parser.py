@@ -8,6 +8,7 @@ import io
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile, ZipFile
@@ -22,6 +23,7 @@ from app.imports.gsc.mapping import (
     map_columns,
     normalize_label,
 )
+from app.imports.gsc.period import PeriodWorksheetTooLarge, extract_reporting_period
 from app.imports.gsc.schemas import ImportPreview, NormalizedGSCRow, ParsedImport, RowError
 from app.normalization.gsc import (
     InvalidGSCValue,
@@ -96,7 +98,7 @@ def _required_mapping(headers: Sequence[Any]) -> tuple[dict[str, int], dict[str,
     return indices, labels
 
 
-def _read_csv(content: bytes) -> tuple[Sequence[Any], RawRows, None]:
+def _read_csv(content: bytes) -> tuple[Sequence[Any], RawRows, None, None, None]:
     """Read UTF-8 CSV strictly and support the common comma, semicolon and tab separators.
     严格读取 UTF-8 CSV，并支持常见的逗号、分号及制表符分隔符。
     """
@@ -116,7 +118,7 @@ def _read_csv(content: bytes) -> tuple[Sequence[Any], RawRows, None]:
         raise ImportFileError(
             "malformed_csv", "CSV cannot be read; check its delimiters and quotes."
         ) from exc
-    return headers, rows, None
+    return headers, rows, None, None, None
 
 
 def _sheet_rows(sheet: Any) -> tuple[Sequence[Any], RawRows]:
@@ -169,7 +171,9 @@ def _has_page_url(rows: RawRows, url_index: int) -> bool:
     return False
 
 
-def _read_xlsx(content: bytes) -> tuple[Sequence[Any], RawRows, str]:
+def _read_xlsx(
+    content: bytes,
+) -> tuple[Sequence[Any], RawRows, str, date | None, date | None]:
     """Prefer recognized Pages sheets and require URL evidence for an unnamed fallback.
     优先选择已识别的网页工作表，并要求未命名回退表提供 URL 证据。
     """
@@ -182,11 +186,15 @@ def _read_xlsx(content: bytes) -> tuple[Sequence[Any], RawRows, str]:
         # GSC 导出包含观测值；拒绝公式，不对公式求值。
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
         _validate_window(workbook)
+        try:
+            period_start, period_end = extract_reporting_period(workbook, MAX_ROWS)
+        except PeriodWorksheetTooLarge as exc:
+            raise ImportFileError("too_many_rows", str(exc)) from exc
         for preferred in PAGE_SHEET_NAMES:
             for name in workbook.sheetnames:
                 if normalize_label(name) == preferred:
                     headers, rows = _sheet_rows(workbook[name])
-                    return headers, rows, name
+                    return headers, rows, name, period_start, period_end
 
         candidates: list[tuple[Sequence[Any], RawRows, str]] = []
         for name in workbook.sheetnames:
@@ -208,7 +216,7 @@ def _read_xlsx(content: bytes) -> tuple[Sequence[Any], RawRows, str]:
                 "name the intended worksheet 'Pages' or '网页'.",
             )
         if candidates:
-            return candidates[0]
+            return *candidates[0], period_start, period_end
         raise ImportFileError(
             "pages_sheet_missing",
             "No GSC Pages worksheet was found. "
@@ -297,17 +305,24 @@ def parse_gsc_pages(content: bytes, filename: str) -> ParsedImport:
     """
     if len(content) > MAX_FILE_SIZE:
         raise ImportFileError("file_too_large", "Uploads must not exceed 5 MiB.")
-    extension = Path(filename).suffix.lower()
+    # Keep only the upload basename, regardless of the client's operating system.
+    # 仅保留上传文件的基本名称，不依赖客户端使用的操作系统。
+    upload_basename = filename.replace("\\", "/").rsplit("/", maxsplit=1)[-1]
+    extension = Path(upload_basename).suffix.lower()
     if extension not in {".csv", ".xlsx"}:
         raise ImportFileError("unsupported_file_type", "Choose a GSC Pages CSV or XLSX export.")
     if not content or not content.strip():
         raise ImportFileError("empty_file", "The uploaded file is empty.")
-    headers, rows, sheet = _read_csv(content) if extension == ".csv" else _read_xlsx(content)
+    headers, rows, sheet, period_start, period_end = (
+        _read_csv(content) if extension == ".csv" else _read_xlsx(content)
+    )
     indices, labels = _required_mapping(headers)
     if not rows:
         raise ImportFileError("empty_file", "The file contains headers but no page rows.")
     accepted, errors, invalid, duplicates = _normalize_rows(rows, indices, len(headers))
     preview = ImportPreview(
+        period_start=period_start,
+        period_end=period_end,
         detected_sheet=sheet,
         total_rows=len(rows),
         valid_rows=len(accepted),
@@ -319,4 +334,4 @@ def parse_gsc_pages(content: bytes, filename: str) -> ParsedImport:
         can_apply=not invalid and not duplicates,
         preview_hash=hashlib.sha256(content).hexdigest(),
     )
-    return ParsedImport(preview=preview, rows=accepted)
+    return ParsedImport(preview=preview, rows=accepted, filename=upload_basename)
