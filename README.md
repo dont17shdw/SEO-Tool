@@ -1,7 +1,7 @@
 # SEO Tool
 
-An AI-assisted SEO operations system. Phases 1–5 provide the runnable foundation, manual GSC imports, historical comparisons, evidence readiness, and current metric provenance. Phase 6 adds explicit site/report-scope evidence and observed-date coverage so matching dates alone never imply proven comparability.
-由 AI 辅助的 SEO 运营系统。第一至五阶段提供可运行基础框架、手动 GSC 导入、历史对比、证据就绪度与当前指标来源。第六阶段增加明确站点与报告范围证据及已观察日期覆盖，确保仅有日期匹配不表示已证明可比。
+An AI-assisted SEO operations system. Phases 1–6 provide the runnable foundation, manual GSC imports, historical comparisons, evidence readiness, current metric provenance, explicit report scope, and observed-date coverage. Phase 7 adds four deterministic runtime opportunity signals, gated by ready comparable evidence, without scores, priorities, or recommended actions.
+由 AI 辅助的 SEO 运营系统。第一至六阶段提供可运行基础框架、手动 GSC 导入、历史对比、证据就绪度、当前指标来源、明确报告范围及已观察日期覆盖。第七阶段增加四种确定性的运行时机会信号，以就绪且可比的证据为门槛，不包含评分、优先级或建议行动。
 
 Long-term workflow: `DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`.
 长期流程：`DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`。
@@ -49,8 +49,8 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:3000> for the development health page, <http://localhost:3000/imports/gsc> to preview and confirm a GSC import, <http://localhost:3000/imports/history> for successful imports, and <http://localhost:3000/pages> for the read-only page list. Open a page from that list to see `/pages/[id]`, including current applied metrics, per-metric provenance, snapshots, comparison, and data quality. API documentation is at <http://localhost:8000/docs>.
-打开 <http://localhost:3000> 查看开发健康检查页面，打开 <http://localhost:3000/imports/gsc> 预览并确认 GSC 导入，打开 <http://localhost:3000/imports/history> 查看成功导入，打开 <http://localhost:3000/pages> 查看只读页面列表。从列表打开页面可查看 `/pages/[id]`，包括当前应用指标、逐指标来源、快照、对比及数据质量。API 文档位于 <http://localhost:8000/docs>。
+Open <http://localhost:3000> for the development health page, <http://localhost:3000/imports/gsc> to preview and confirm a GSC import, <http://localhost:3000/imports/history> for successful imports, <http://localhost:3000/pages> for the read-only page list, and <http://localhost:3000/opportunities> for paginated runtime signals. Open a page from the page list to see `/pages/[id]`, including current applied metrics, per-metric provenance, snapshots, comparison, data quality, and opportunity candidates or their evidence-gate reasons. API documentation is at <http://localhost:8000/docs>.
+打开 <http://localhost:3000> 查看开发健康检查页面，打开 <http://localhost:3000/imports/gsc> 预览并确认 GSC 导入，打开 <http://localhost:3000/imports/history> 查看成功导入，打开 <http://localhost:3000/pages> 查看只读页面列表，打开 <http://localhost:3000/opportunities> 查看分页运行时信号。从页面列表打开页面可查看 `/pages/[id]`，包括当前应用指标、逐指标来源、快照、对比、数据质量，以及机会候选或证据门槛原因。API 文档位于 <http://localhost:8000/docs>。
 
 ```sh
 curl http://localhost:8000/api/v1/health
@@ -65,8 +65,8 @@ If you change the database credentials or port in the root `.env`, update `DATAB
 For an existing PostgreSQL instance, skip Compose, set `DATABASE_URL`, and apply the Alembic migrations. The applications run on the host. Phase 6 adds head revision `0004_report_scope`: run `uv run alembic upgrade head` before using the importer or history APIs. It creates minimal sites and additive scope/coverage fields, preserving all five existing tables, metric values, timestamps, and provenance links. Legacy site/scope/coverage remains unknown without backfill. Downgrade refuses safely if scoped records cannot satisfy the earlier global URL or file-hash uniqueness constraints.
 使用已有 PostgreSQL 实例时，可跳过 Compose，设置 `DATABASE_URL` 并执行 Alembic 迁移。应用在宿主机上运行。第六阶段增加最新修订 `0004_report_scope`：使用导入器或历史 API 前，请运行 `uv run alembic upgrade head`。它创建最小站点表及附加范围与覆盖字段，保留已有五个表、指标值、时间戳与来源关联。旧站点、范围及覆盖保持未知，不回填。如果按范围存储的记录无法满足此前全局 URL 或文件哈希唯一性约束，降级会安全拒绝。
 
-Data-quality and provenance observations are calculated at request time and are not persisted. Only the current page-to-metric-to-snapshot links are stored.
-数据质量与来源观察在请求时计算，不持久化。仅存储当前页面、指标及快照之间的关联。
+Data-quality observations, provenance observations, and opportunity candidates are calculated at request time and are not persisted. Only the current page-to-metric-to-snapshot links are stored for provenance. Phase 7 adds no migration; Alembic head remains `0004_report_scope` and the reserved `SEOOpportunity` table stays untouched.
+数据质量观察、来源观察及机会候选在请求时计算，不持久化。来源仅存储当前页面、指标及快照之间的关联。第七阶段不增加迁移；Alembic 最新修订仍为 `0004_report_scope`，预留 `SEOOpportunity` 表保持不变。
 
 ## GSC import / GSC 导入
 
@@ -143,11 +143,22 @@ npm run typecheck
 npm run build
 ```
 
+## Opportunity signals / 机会信号
+
+`GET /api/v1/pages/{page_id}/opportunities` returns page eligibility, existing evidence-gate facts, and factual candidates. `GET /api/v1/opportunities` lists actual candidates with bounded pagination and optional `site_id` filtering, ordered neutrally by URL, opportunity type, and page ID. A ready page may return zero candidates or several different types. Neither endpoint creates `SEOOpportunity` records.
+`GET /api/v1/pages/{page_id}/opportunities` 返回页面资格、已有证据门槛事实及事实候选。`GET /api/v1/opportunities` 对实际候选执行有界分页，可选按 `site_id` 筛选，并按 URL、机会类型及页面 ID 进行中立排序。就绪页面可返回零个候选，也可返回多个不同类型。两个接口均不创建 `SEOOpportunity` 记录。
+
+The four v1 types are `traffic_decline`, `ctr_opportunity`, `ranking_decline`, and `impression_growth_gap`. They require the existing selected comparison and `ready` page readiness, explicitly compatible scopes, complete observed 28-day coverage on both reports, and valid rule metrics/baselines. `limited` or `insufficient` evidence generates zero candidates. Current applied metrics and their provenance do not replace historical snapshot evidence.
+四种 V1 类型为 `traffic_decline`、`ctr_opportunity`、`ranking_decline` 及 `impression_growth_gap`。它们要求已有所选对比及 `ready` 页面就绪度、明确兼容范围、两个报告均有完整已观察 28 天覆盖，以及有效规则指标与基准。`limited` 或 `insufficient` 证据生成零个候选。当前应用指标及其来源不能替代历史快照证据。
+
+These are transparent heuristic signals, not a claim about cause or the action to take. CTR deterioration alone does not establish a title/meta problem. Exact thresholds, inclusive/strict boundaries, evidence schema, examples, and scale limits are documented in [opportunity-engine.md](docs/opportunity-engine.md).
+这些是透明的启发式信号，不声称变化原因或应该采取的行动。仅有 CTR 恶化不能证明标题或元描述问题。准确阈值、包含边界或严格边界、证据结构、示例及规模限制详见 [opportunity-engine.md](docs/opportunity-engine.md)。
+
 ## Structure and boundaries / 结构与边界
 
 ```text
 backend/              FastAPI, GSC importer, SQLAlchemy, Alembic, tests / API、导入、数据层、迁移、测试
-frontend/             Next.js import, current-page, history views / 导入、当前页面、历史视图
+frontend/             Next.js import, page, history, signal views / 导入、页面、历史、信号视图
 docs/architecture.md  Component boundaries and current scope / 模块边界与当前范围
 docs/data-model.md    PostgreSQL fields and preservation rules / 字段与保留规则
 docs/gsc-import.md    GSC formats, normalization, workflow, APIs / 格式、标准化、流程、API
@@ -155,14 +166,15 @@ docs/performance-history.md  History, dates, comparisons, limits / 历史、日�
 docs/data-quality.md   Runtime observations and evidence readiness / 运行时观察与证据就绪度
 docs/current-provenance.md  Per-field current sources and limits / 逐字段当前来源与限制
 docs/report-scope.md   Property/search/filter evidence and date coverage / 属性、搜索、筛选证据及日期覆盖
+docs/opportunity-engine.md  Runtime signals, evidence gate, exact v1 rules / 运行时信号、证据门槛、准确 V1 规则
 compose.yaml          Local PostgreSQL service only / 仅本地 PostgreSQL 服务
 ```
 
-Imports and normalization implement the GSC file workflow. The analysis boundary separates deterministic comparison, data quality, and current provenance from source parsing. Scoring, decisions, AI reasoning, and execution remain reserved modules. Phase 6 completes the planned data foundation without implementing SEO judgments, opportunities, recommendations, GSC/GA4 API integrations, AI calls, background jobs, autonomous actions, or production deployment.
-导入与标准化模块实现 GSC 文件流程。分析边界将确定性对比、数据质量及当前来源与来源解析分开。评分、决策、AI 推理及执行仍为预留模块。第六阶段完成计划中的数据基础，不实现 SEO 判断、机会、建议、GSC/GA4 API 集成、AI 调用、后台任务、自主行动或生产部署。
+Imports and normalization implement the GSC file workflow. The analysis boundary separates deterministic comparison, data quality, current provenance, and runtime opportunity detection from source parsing. Phase 6 completed the data foundation; Phase 7 consumes its evidence without changing Phase 3–6 semantics. Scoring, prioritization, decisions, AI reasoning, and execution remain separate reserved boundaries. There are no recommendations, GSC/GA4 API integrations, AI calls, background jobs, autonomous actions, or production deployment.
+导入与标准化模块实现 GSC 文件流程。分析边界将确定性对比、数据质量、当前来源及运行时机会检测与来源解析分开。第六阶段完成数据基础；第七阶段使用其证据，不改变第三至六阶段语义。评分、优先级、决策、AI 推理及执行仍为独立预留边界。没有建议、GSC/GA4 API 集成、AI 调用、后台任务、自主行动或生产部署。
 
-Read [architecture](docs/architecture.md), [data model](docs/data-model.md), [GSC import](docs/gsc-import.md), [performance history](docs/performance-history.md), [data quality](docs/data-quality.md), [current provenance](docs/current-provenance.md), [report scope](docs/report-scope.md), and [agent instructions](AGENTS.md) before extending the application. Important documentation and non-trivial code comments/docstrings use English first, Chinese second.
-扩展应用之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)、[GSC 导入文档](docs/gsc-import.md)、[性能历史文档](docs/performance-history.md)、[数据质量文档](docs/data-quality.md)、[当前来源文档](docs/current-provenance.md)、[报告范围文档](docs/report-scope.md)和[代理开发指南](AGENTS.md)。重要文档及非简单代码注释、文档字符串使用英文在前、中文在后的双语形式。
+Read [architecture](docs/architecture.md), [data model](docs/data-model.md), [GSC import](docs/gsc-import.md), [performance history](docs/performance-history.md), [data quality](docs/data-quality.md), [current provenance](docs/current-provenance.md), [report scope](docs/report-scope.md), [opportunity engine](docs/opportunity-engine.md), and [agent instructions](AGENTS.md) before extending the application. Important documentation and non-trivial code comments/docstrings use English first, Chinese second.
+扩展应用之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)、[GSC 导入文档](docs/gsc-import.md)、[性能历史文档](docs/performance-history.md)、[数据质量文档](docs/data-quality.md)、[当前来源文档](docs/current-provenance.md)、[报告范围文档](docs/report-scope.md)、[机会引擎文档](docs/opportunity-engine.md)和[代理开发指南](AGENTS.md)。重要文档及非简单代码注释、文档字符串使用英文在前、中文在后的双语形式。
 
 To stop the local database while retaining its data, run `docker compose down` from the repository root.
 如需停止本地数据库并保留数据，请从仓库根目录运行 `docker compose down`。

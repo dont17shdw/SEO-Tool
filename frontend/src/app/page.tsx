@@ -5,11 +5,11 @@ export default function Home() {
   return (
     <main>
       <header>
-        <p className="eyebrow">Phase 5 · Development interface / 第五阶段 · 开发界面</p>
+        <p className="eyebrow">Phase 7 · Development interface / 第七阶段 · 开发界面</p>
         <h1>SEO Tool</h1>
         <p className="intro">
-          Import, validate, and view Google Search Console page data.
-          <span lang="zh"> 导入、校验和查看 Google Search Console 网页数据。</span>
+          Import Google Search Console data, inspect comparison evidence, and view factual opportunity signals.
+          <span lang="zh"> 导入 Google Search Console 数据，检查对比证据，并查看事实机会信号。</span>
         </p>
       </header>
 
@@ -26,6 +26,7 @@ export default function Home() {
         <p><Link href="/imports/gsc">Import GSC pages / 导入 GSC 网页 →</Link></p>
         <p><Link href="/pages">View stored pages / 查看已保存页面 →</Link></p>
         <p><Link href="/imports/history">View import history / 查看导入历史 →</Link></p>
+        <p><Link href="/opportunities">View opportunity candidates / 查看机会候选 →</Link></p>
       </section>
     </main>
   );

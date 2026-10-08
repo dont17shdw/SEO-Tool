@@ -2,6 +2,7 @@ import { isCount, isPageMetrics, isRecord, isReportingPeriod, requestJson, type 
 import { isDataQuality, type DataQuality } from "@/lib/data-quality";
 import { isCurrentProvenance, type CurrentProvenance } from "@/lib/current-provenance";
 import { isDateCoverage, isReportScope, type DateCoverage, type ReportScope } from "@/lib/report-scope";
+import { isPageOpportunityAnalysis, type PageOpportunityAnalysis } from "@/lib/opportunities-api";
 
 type ReportingPeriod = {
   reporting_window: "latest_28_days";
@@ -70,12 +71,13 @@ export type PerformanceComparison = {
 export type PaginationMetadata = { page: number; page_size: number; total: number; total_pages: number };
 export type ImportHistoryResponse = PaginationMetadata & { items: ImportRun[] };
 export type PagePerformanceResponse = PaginationMetadata & {
-  current_page: PageMetrics & { id: string };
+  current_page: PageMetrics & { id: string; site_id: string | null };
   items: PerformanceSnapshot[];
   comparison: PerformanceComparison | null;
   comparison_unavailable_reason: string | null;
   quality: DataQuality;
   provenance: CurrentProvenance;
+  opportunities: PageOpportunityAnalysis;
 };
 
 function isPagination(value: Record<string, unknown>, page: number, pageSize: number): boolean {
@@ -167,9 +169,13 @@ export async function getPagePerformance(pageId: string, page: number, pageSize:
   const payload = await requestJson(`/pages/${encodeURIComponent(pageId)}/performance?${query}`, { method: "GET", signal });
   if (!isRecord(payload) || !isPagination(payload, page, pageSize) ||
     !isRecord(payload.current_page) || payload.current_page.id !== pageId || !isPageMetrics(payload.current_page) ||
+    !(payload.current_page.site_id === null || typeof payload.current_page.site_id === "string") ||
     !Array.isArray(payload.items) || !payload.items.every(isSnapshot) || !isComparison(payload.comparison) ||
     !(payload.comparison_unavailable_reason === null || typeof payload.comparison_unavailable_reason === "string") ||
-    !isDataQuality(payload.quality, pageId) || !isCurrentProvenance(payload.provenance, pageId, payload.current_page)) {
+    !isDataQuality(payload.quality, pageId) || !isCurrentProvenance(payload.provenance, pageId, payload.current_page) ||
+    !isPageOpportunityAnalysis(payload.opportunities,
+      payload.current_page as PagePerformanceResponse["current_page"],
+      payload.comparison as PerformanceComparison | null, payload.quality as DataQuality)) {
     throw new Error("Unexpected page performance response. 页面表现响应格式不符合预期。");
   }
   return payload as PagePerformanceResponse;

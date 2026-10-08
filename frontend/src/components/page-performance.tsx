@@ -7,6 +7,7 @@ import { PageMetricsTable } from "@/components/page-metrics-table";
 import { PageDataQuality } from "@/components/page-data-quality";
 import { PageMetricProvenance } from "@/components/page-metric-provenance";
 import { ReportScopeSummary } from "@/components/report-scope-summary";
+import { PageOpportunities } from "@/components/opportunity-candidates";
 import { formatMetric } from "@/lib/gsc-api";
 import { formatChange, formatImportTime, formatPeriod, getPagePerformance, type PerformanceComparison } from "@/lib/history-api";
 import { usePaginatedResource } from "@/lib/use-paginated-resource";
@@ -97,6 +98,8 @@ export function PagePerformance({ pageId }: { pageId: string }) {
               <p>A comparison requires two distinct date-compatible exact periods without a proven report-scope conflict. 对比需要两个不同、日期兼容且没有已证明报告范围冲突的精确时间段。</p>
             </section>
           )}
+
+          <PageOpportunities analysis={data.opportunities} />
 
           <section className="card" aria-labelledby="snapshots-heading">
             <h2 id="snapshots-heading">Historical snapshots / 历史快照</h2>

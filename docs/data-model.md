@@ -2,9 +2,9 @@
 
 ## Purpose / 目的
 
-PostgreSQL stores six tables. `sites` minimally identifies explicit GSC properties; `website_pages` holds current applied state within a site or unknown-site namespace. `import_runs` stores report-level scope/coverage and successful history; `page_performance_snapshots` retains page observations; `page_metric_provenance` links four current metrics to their supplying snapshots. `seo_opportunities` remains a future contract without a generator. Comparison, quality, and provenance observations remain runtime responses.
+PostgreSQL stores six tables. `sites` minimally identifies explicit GSC properties; `website_pages` holds current applied state within a site or unknown-site namespace. `import_runs` stores report-level scope/coverage and successful history; `page_performance_snapshots` retains page observations; `page_metric_provenance` links four current metrics to their supplying snapshots. `seo_opportunities` remains a reserved persistence contract. Phase 7 opportunity candidates, comparisons, quality, and provenance observations are runtime responses, not new database entities.
 
-PostgreSQL 存储六个表。`sites` 最小化标识明确 GSC 属性；`website_pages` 在站点或未知站点命名空间内保存当前应用状态。`import_runs` 存储报告级范围、覆盖及成功历史；`page_performance_snapshots` 保留页面观察；`page_metric_provenance` 将四个当前指标关联至提供值的快照。`seo_opportunities` 仍为未来契约，没有生成器。对比、质量及来源观察仍为运行时响应。
+PostgreSQL 存储六个表。`sites` 最小化标识明确 GSC 属性；`website_pages` 在站点或未知站点命名空间内保存当前应用状态。`import_runs` 存储报告级范围、覆盖及成功历史；`page_performance_snapshots` 保留页面观察；`page_metric_provenance` 将四个当前指标关联至提供值的快照。`seo_opportunities` 仍为预留持久化契约。第七阶段机会候选、对比、质量及来源观察均为运行时响应，不是新增数据库实体。
 
 SQLAlchemy models define the schema and Alembic creates it through an explicit migration. Model changes require a corresponding migration. FastAPI startup and the health endpoint do not create tables or check database connectivity.
 
@@ -20,8 +20,8 @@ SQLAlchemy 模型定义数据库结构，Alembic 通过显式迁移创建结构�
 - **数值：** SQLAlchemy 为 `Numeric` 字段使用十进制值。点击率与置信度以 `0` 至 `1` 的比例存储；例如，`0.025` 表示 2.5%。
 - **Time:** PostgreSQL `TIMESTAMP WITH TIME ZONE` represents instants; history APIs return offset-bearing timestamps. Reporting periods use calendar `DATE` values, not instants or inferred import dates.
 - **时间：** PostgreSQL `TIMESTAMP WITH TIME ZONE` 表示时间点；历史 API 返回带偏移的时间戳。报告时间段使用日历 `DATE` 值，不是时间点或推导的导入日期。
-- **Classification:** Page types, index statuses, opportunity types, severity, risk levels, and opportunity statuses are strings. No fixed SEO taxonomy or derived classification is implemented.
-- **分类：** 页面类型、索引状态、机会类型、严重程度、风险级别及机会状态均使用字符串。不实现固定 SEO 分类体系或推导分类。
+- **Classification:** Persisted page types, index statuses, opportunity types, severity, risk levels, and opportunity statuses are strings. The reserved table has no enforced SEO taxonomy. The separate Phase 7 runtime contract has four explicit signal codes; it does not populate those string fields.
+- **分类：** 持久化页面类型、索引状态、机会类型、严重程度、风险级别及机会状态均使用字符串。预留表没有强制 SEO 分类体系。独立第七阶段运行时契约包含四个明确的信号代码，不填充这些字符串字段。
 
 ## Site / 站点
 
@@ -84,9 +84,9 @@ The six click/impression fields, word count, link counts, and backlinks have non
 
 ## SEOOpportunity / SEO 机会
 
-The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs to exactly one page. Phase 6 has no opportunity writer API, generator, or scoring implementation. Quality and provenance requests create no opportunity records.
+The `SEOOpportunity` model maps to `seo_opportunities`. Each stored opportunity belongs to exactly one page. Phase 6 implemented no opportunity generator; Phase 7 now generates runtime candidates in a separate database-independent model, never rows in this table. There is no opportunity writer API or scoring implementation. Quality, provenance, performance, and opportunity GET requests do not insert, update, or delete opportunity records.
 
-`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个机会只能属于一个页面。第六阶段没有机会写入 API、生成器或评分实现。质量及来源请求不创建机会记录。
+`SEOOpportunity` 模型对应 `seo_opportunities` 表。每个已存储机会只能属于一个页面。第六阶段没有机会生成器；第七阶段现在通过独立于数据库的模型生成运行时候选，绝不写入此表。没有机会写入 API 或评分实现。质量、来源、性能及机会 GET 请求均不插入、更新或删除机会记录。
 
 | Field / 字段 | PostgreSQL type / PostgreSQL 类型 | Nullable / 可空 | Meaning and constraints / 含义与约束 |
 | --- | --- | --- | --- |
@@ -107,6 +107,17 @@ The `SEOOpportunity` model maps to `seo_opportunities`. Each opportunity belongs
 The database constrains `opportunity_score` to non-negative values and `confidence` to `[0, 1]`. It deliberately does not impose a maximum score, severity ordering, allowed status transitions, or AI-derived meaning. Future scoring must document its scale and inputs before populating scores.
 
 数据库约束 `opportunity_score` 为非负值，`confidence` 位于 `[0, 1]`。它不规定评分上限、严重程度排序、允许的状态变化或 AI 推导含义。未来评分功能必须在写入评分前记录量表及输入。
+
+## Phase 7 runtime candidate contract / 第七阶段运行时候选契约
+
+`OpportunityCandidate` is a frozen analysis dataclass, not an ORM model. Its identity within one analysis is page + selected previous/current snapshot pair + opportunity type. It contains page/site IDs and URL, selected snapshot IDs and exact period bounds, `evidence_readiness="ready"`, `scope_compatibility="compatible"`, a factual `reason_code` and bilingual `message`, and `evidence` with `previous`, `current`, `changes`, and `thresholds`. Each rule includes only its relevant metrics.
+`OpportunityCandidate` 为不可变分析数据类，不是 ORM 模型。在一次分析中，其身份为页面、所选此前与当前快照对及机会类型。它包含页面与站点 ID、URL、所选快照 ID 及准确时间段起止日期、`evidence_readiness="ready"`、`scope_compatibility="compatible"`、事实 `reason_code` 与双语 `message`，以及含 `previous`、`current`、`changes` 与 `thresholds` 的 `evidence`。每条规则仅包含相关指标。
+
+There is no candidate database ID, status lifecycle, score, priority, action, AI confidence, expected impact, effort, or risk. `PageOpportunityAnalysis` additionally describes eligibility, existing quality gate reasons/observations, the existing selected comparison, and zero or more candidates. Current applied metric/provenance values are not rule inputs. [opportunity-engine.md](opportunity-engine.md) defines the exact fields, thresholds, and APIs.
+没有候选数据库 ID、状态生命周期、评分、优先级、行动、AI 置信度、预期影响、工作量或风险。`PageOpportunityAnalysis` 额外描述资格、已有质量门槛原因与观察、已有所选对比，以及零个或多个候选。当前应用指标与来源值不作为规则输入。[opportunity-engine.md](opportunity-engine.md) 定义准确字段、阈值及 API。
+
+Phase 7 adds no migration and never alters or removes the placeholder model. Alembic head remains `0004_report_scope`. Persisting candidates would require separately specified regeneration, deduplication, status, and versioning semantics; Phase 7 deliberately leaves those decisions open while heuristics are validated.
+第七阶段不增加迁移，绝不修改或移除占位模型。Alembic 最新修订仍为 `0004_report_scope`。持久化候选需要另行定义重新生成、去重、状态及版本语义；验证启发式规则期间，第七阶段明确保留这些决策。
 
 ## ImportRun / 导入记录
 
@@ -238,6 +249,6 @@ Phase 6 comparison groups revisions by canonical scope identity before selecting
 
 `WebsitePage` 仍为最近成功应用的非空白状态，不是带日期的历史记录。连续文件可组合指标，或后来应用较早报告时间段。带日期的对比使用快照及其导入记录，绝不将当前页面字段作为历史证据。未知时间段日期保持 `NULL`；已知的已观察起止日期不能证明完整或连续的 28 天导出。已观察覆盖独立存储；原始字节及规范范围定义重复导入，不使用语义行等价性。
 
-The minimal multi-property namespace verifies no user/account access and performs no property membership fetch. There is no production authentication, account/team management, full-text search, failed-attempt log, tamper-proof audit trail, scoring formula, or opportunity engine. Successful-import history is a lightweight evidence record; direct SQL may bypass controlled writers. See [performance-history.md](performance-history.md) for comparison selection and missing-data rules. Phase 7 has not started.
+The minimal multi-property namespace verifies no user/account access and performs no property membership fetch. There is no production authentication, account/team management, full-text search, failed-attempt log, tamper-proof audit trail, or scoring formula. Successful-import history is a lightweight evidence record; direct SQL may bypass controlled writers. See [performance-history.md](performance-history.md) for comparison selection and missing-data rules, and [opportunity-engine.md](opportunity-engine.md) for runtime signal limits. Candidate outputs are recomputed under the current immutable configuration without a persisted analysis version or audit log; Phase 8 is not implemented.
 
-最小多属性命名空间不验证用户或账户访问，也不获取属性成员关系。没有生产身份认证、账户或团队管理、全文搜索、失败尝试日志、防篡改审计记录、评分公式或机会引擎。成功导入历史为轻量证据记录；直接 SQL 可绕过受控写入器。对比选择与缺失数据规则详见 [performance-history.md](performance-history.md)。第七阶段尚未开始。
+最小多属性命名空间不验证用户或账户访问，也不获取属性成员关系。没有生产身份认证、账户或团队管理、全文搜索、失败尝试日志、防篡改审计记录或评分公式。成功导入历史为轻量证据记录；直接 SQL 可绕过受控写入器。对比选择与缺失数据规则详见 [performance-history.md](performance-history.md)，运行时信号限制详见 [opportunity-engine.md](opportunity-engine.md)。候选使用当前不可变配置重新计算，没有持久化分析版本或审计日志；第八阶段未实现。
