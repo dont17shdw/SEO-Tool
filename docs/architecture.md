@@ -2,11 +2,11 @@
 
 ## Scope / 范围
 
-Phases 1–5 established the runnable stack, manual GSC Pages imports, historical snapshots, deterministic comparisons, runtime data quality, and per-field current provenance. Phase 6 adds explicit site/report-scope evidence and observed-date coverage, completing the planned data foundation without an SEO Opportunity Engine.
-第一至五阶段建立可运行技术栈、手动 GSC 网页导入、历史快照、确定性对比、运行时数据质量及逐字段当前来源。第六阶段增加明确站点与报告范围证据及已观察日期覆盖，完成计划中的数据基础，不包含 SEO 机会引擎。
+Phases 1–6 established the runnable stack, manual GSC Pages imports, historical snapshots, deterministic comparisons, runtime data quality, per-field current provenance, explicit report scope, and observed-date coverage. Phase 7 adds a database-independent Opportunity Engine that produces four runtime signals only from ready comparable evidence.
+第一至六阶段建立可运行技术栈、手动 GSC 网页导入、历史快照、确定性对比、运行时数据质量、逐字段当前来源、明确报告范围及已观察日期覆盖。第七阶段增加独立于数据库的机会引擎，仅使用就绪可比证据生成四种运行时信号。
 
-The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**; V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. The implemented flow is **GSC SOURCE → IMPORT → REPORT SCOPE → SNAPSHOT → CURRENT PROVENANCE → COMPARISON → DATA QUALITY**. Current applied state remains distinct from historical comparison evidence.
-长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**；V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。已实现流程为 **GSC SOURCE → IMPORT → REPORT SCOPE → SNAPSHOT → CURRENT PROVENANCE → COMPARISON → DATA QUALITY**。当前应用状态与历史对比证据保持独立。
+The long-term workflow is **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**; V1 is **DATA → ANALYZE → PRIORITIZE → RECOMMEND**. The historical analysis flow is **GSC SOURCE → IMPORT → REPORT SCOPE → SNAPSHOT → COMPARISON → DATA QUALITY → OPPORTUNITY SIGNALS**. Current applied metrics and provenance form a separate read view; they are not opportunity inputs. Prioritization and recommendations are still unimplemented.
+长期流程为 **DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN**；V1 为 **DATA → ANALYZE → PRIORITIZE → RECOMMEND**。历史分析流程为 **GSC SOURCE → IMPORT → REPORT SCOPE → SNAPSHOT → COMPARISON → DATA QUALITY → OPPORTUNITY SIGNALS**。当前应用指标及来源组成独立读取视图，不是机会输入。优先级与建议仍未实现。
 
 ## Local runtime / 本地运行架构
 
@@ -17,7 +17,8 @@ Browser / 浏览器
         ├── /imports/gsc          Scope declaration, preview, apply / 范围声明、预览、应用
         ├── /imports/history      Import scope and coverage / 导入范围与覆盖
         ├── /pages                Paginated current page list / 分页当前页面列表
-        └── /pages/[id]           History, scope, quality, sources / 历史、范围、质量、来源
+        ├── /opportunities        Paginated factual signals / 分页事实信号
+        └── /pages/[id]           History, quality, sources, signals / 历史、质量、来源、信号
               └── FastAPI /api/v1
                     └── SQLAlchemy → PostgreSQL
 Alembic → Explicit migrations / 显式迁移
@@ -36,7 +37,7 @@ backend/app/
   models/                   Sites, pages, history, current links / 站点、页面、历史、当前关联
   imports/gsc/              Source parsing, metadata, persistence / 来源解析、元数据、持久化
   normalization/            URL/metric/scope canonicalization / URL、指标、范围规范化
-  analysis/                 Scope compatibility, comparison, quality, provenance / 范围兼容、对比、质量、来源
+  analysis/                 Scope, comparison, quality, provenance, signals / 范围、对比、质量、来源、信号
   scoring/                  Reserved calculation boundary / 预留计算边界
   decision_engine/          Reserved decision boundary / 预留决策边界
   ai/                       Reserved semantic reasoning boundary / 预留语义推理边界
@@ -57,6 +58,8 @@ docs/                       Bilingual contracts and setup / 双语契约与设�
   **分析：** 范围兼容性根据明确事实返回 `compatible`、`incompatible` 或 `unknown`。对比排除冲突范围，复用已有日期、时长与数值计算。质量使用该所选对及完整历史；不重复计算、不写入判断，也不生成机会。
 - **Current provenance:** Recorded page/metric/snapshot links retain Phase 5 meaning. A supplied same value or measured zero refreshes a link; blanks preserve value and link. An older period applied later can remain current. Scope neither rewrites provenance nor establishes missing legacy links.
   **当前来源：** 已记录页面、指标与快照关联保留第五阶段含义。提供的相同值或测得零刷新关联；空白保留值与关联。后来应用的较早时间段仍可成为当前来源。范围不重写来源，也不建立缺失旧关联。
+- **Opportunity detection:** `analysis/opportunity_engine.py` consumes the existing comparison and readiness results, then evaluates immutable centralized v1 rules. It returns database-independent evidence candidates without writing `SEOOpportunity` records. It does not select another pair, add another quality taxonomy, rank signals, infer causes, or suggest actions.
+  **机会检测：** `analysis/opportunity_engine.py` 使用已有对比及就绪度结果，再评估不可变的集中 V1 规则。返回独立于数据库的证据候选，不写入 `SEOOpportunity` 记录。不另选对比对、不增加另一质量分类、不对信号排序价值、不推断原因，也不建议行动。
 - **Future processing:** Calculations remain deterministic. Scoring, decisions, model-independent semantic AI reasoning, and execution remain separate reserved modules. No implemented read view triggers external actions.
   **未来处理：** 计算保持确定性。评分、决策、独立于模型的语义 AI 推理及执行仍为独立预留模块。已实现读取视图不触发外部行动。
 
@@ -85,9 +88,11 @@ Workbook metadata is not an exhaustive scope certificate. The previously inspect
 | `GET /api/v1/pages/{page_id}/quality` | Runtime evidence readiness and observations.<br>运行时证据就绪度与观察。 |
 | `GET /api/v1/imports/{import_run_id}/quality` | Runtime import facts without page readiness.<br>不包含页面就绪度的运行时导入事实。 |
 | `GET /api/v1/pages/{page_id}/provenance` | Four current-metric source entries, unchanged semantics.<br>四个当前指标来源条目，语义不变。 |
+| `GET /api/v1/pages/{page_id}/opportunities` | Runtime eligibility, gate facts, and page signals.<br>运行时资格、门槛事实及页面信号。 |
+| `GET /api/v1/opportunities` | Candidate pagination with optional site filtering and neutral ordering.<br>候选分页、可选站点筛选及中立排序。 |
 
-The browser calls `NEXT_PUBLIC_API_BASE_URL` directly, defaulting to `http://localhost:8000`; `CORS_ORIGINS` lists allowed browser origins. `/docs` describes typed contracts. There are no editing/deletion, opportunity, site-management, or account-management endpoints.
-浏览器直接调用 `NEXT_PUBLIC_API_BASE_URL`，默认 `http://localhost:8000`；`CORS_ORIGINS` 列出允许浏览器来源。`/docs` 描述带类型契约。没有编辑删除、机会、站点管理或账户管理接口。
+The browser calls `NEXT_PUBLIC_API_BASE_URL` directly, defaulting to `http://localhost:8000`; `CORS_ORIGINS` lists allowed browser origins. `/docs` describes typed contracts. Opportunity endpoints are read-only. There are no editing/deletion, persisted-opportunity management, site-management, or account-management endpoints.
+浏览器直接调用 `NEXT_PUBLIC_API_BASE_URL`，默认 `http://localhost:8000`；`CORS_ORIGINS` 列出允许浏览器来源。`/docs` 描述带类型契约。机会接口仅为只读。没有编辑删除、持久化机会管理、站点管理或账户管理接口。
 
 ## Comparison and evidence readiness / 对比与证据就绪度
 
@@ -100,18 +105,21 @@ Reliable date sets establish `complete` only for 28 distinct consecutive dates s
 No eligible pair means `insufficient`. A selected unknown-scope pair or either selected report's partial/unknown coverage means `limited`, alongside prior overlap, missing metrics, zero baselines, and relevant out-of-order checks. `ready` additionally requires proven compatible scope and complete observed coverage. Stable new observations are `unknown_report_scope`, `incompatible_report_scope`, `incomplete_date_coverage`, and `unknown_date_coverage`. Historical caveats outside the selected pair stay visible without automatically lowering readiness. Current-provenance observations remain separate. See [performance-history.md](performance-history.md) and [data-quality.md](data-quality.md).
 没有合格对时为 `insufficient`。所选未知范围对或任一所选报告的部分、未知覆盖表示 `limited`，并保留此前重叠、缺失指标、零基准与相关乱序检查。`ready` 另外要求已证明范围兼容与完整已观察覆盖。稳定新增观察为 `unknown_report_scope`、`incompatible_report_scope`、`incomplete_date_coverage` 及 `unknown_date_coverage`。所选对之外的历史限制保持可见，不自动降低就绪度。当前来源观察保持独立。详见 [performance-history.md](performance-history.md) 与 [data-quality.md](data-quality.md)。
 
-The shared page loader reads complete history once and computes comparison once for quality and provenance. Run-level scope and coverage are reused from the existing join; snapshot pagination cannot alter the selected comparison or evidence summaries. Full history remains in memory for development-scale data.
-共享页面读取流程仅读取一次完整历史，计算一次对比并复用于质量与来源。导入级范围与覆盖从已有连接复用；快照分页不能改变所选对比或证据摘要。完整历史仍在内存中处理，适用于开发规模数据。
+The shared page loader reads complete history once and computes comparison once for quality, provenance, and opportunity detection. Run-level scope and coverage are reused from the existing join; snapshot pagination cannot alter the selected comparison or evidence summaries. Full history remains in memory for development-scale data.
+共享页面读取流程仅读取一次完整历史，计算一次对比并复用于质量、来源及机会检测。导入级范围与覆盖从已有连接复用；快照分页不能改变所选对比或证据摘要。完整历史仍在内存中处理，适用于开发规模数据。
+
+The global opportunity loader uses two grouped SELECTs for pages and joined snapshot/run history rather than round trips per page or candidate. It evaluates relevant histories, sorts actual emitted candidates by URL/type/page ID, and only then applies `page`/`page_size` and total counting. Page rows are not paginated first. The dedicated page opportunity endpoint uses two SELECTs; performance retains its three SELECTs including provenance. There is no candidate cache or persisted lifecycle. See [opportunity-engine.md](opportunity-engine.md) for the precise gate, rule predicates, and scale boundary.
+全局机会读取流程对页面及连接的快照与导入历史执行两个分组 SELECT，不为每个页面或候选单独往返数据库。它评估相关历史，按 URL、类型与页面 ID 排序实际生成候选，然后应用 `page`、`page_size` 及总数统计。不先对页面行分页。独立页面机会接口使用两个 SELECT；性能接口仍保留包含来源在内的三个 SELECT。没有候选缓存或持久化生命周期。准确门槛、规则谓词及规模边界详见 [opportunity-engine.md](opportunity-engine.md)。
 
 ## Migration and limits / 迁移与限制
 
 Head revision `0004_report_scope` creates `sites`, adds nullable ownership and report evidence, and changes URL/duplicate-import uniqueness. All five legacy tables, every original value/timestamp, and current links are preserved. Unknown legacy site, scope, and coverage remain unknown. No production property or prior evidence is fabricated. Downgrade checks whether the old global constraints can be restored and refuses atomically if duplicate scoped URLs or file identities would violate them; it never deletes history or rewrites hashes. See [data-model.md](data-model.md).
 最新修订 `0004_report_scope` 创建 `sites`，增加可空归属及报告证据，并改变 URL 与重复导入唯一性。已有五个表、每个原始值与时间戳及当前关联均保留。未知旧站点、范围及覆盖保持未知。不编造生产属性或此前证据。降级检查能否恢复旧全局约束；如果按范围存储的重复 URL 或文件身份违反约束，则原子拒绝，绝不删除历史或重写哈希。详见 [data-model.md](data-model.md)。
 
-Uploads retain existing 5 MiB/10,000-row limits, ephemeral processing, and synthetic tests. Site identifiers are explicit evidence, not authenticated property ownership. Unknown/unsupported source metadata, source accuracy, complete page exports, statistical significance, and unobserved changes cannot be certified. Real exports, credentials, and scratch data stay outside Git. The application still excludes SEO opportunities, scoring, recommendations, Decision Engine logic, AI calls, GSC/GA4 APIs, WordPress, outreach, scheduling, and execution.
-上传沿用 5 MiB 与 10,000 行限制、临时处理及合成测试。站点标识是明确证据，不是已认证属性归属。未知或不支持来源元数据、来源准确性、完整页面导出、统计显著性与未观察变化不能获证明。真实导出、凭据及临时数据保留在 Git 之外。应用仍不包含 SEO 机会、评分、建议、决策引擎逻辑、AI 调用、GSC/GA4 API、WordPress、外链联系、调度及执行。
+Uploads retain existing 5 MiB/10,000-row limits, ephemeral processing, and synthetic tests. Site identifiers are explicit evidence, not authenticated property ownership. Unknown/unsupported source metadata, source accuracy, complete page exports, statistical significance, and unobserved changes cannot be certified. Real exports, credentials, and scratch data stay outside Git. Phase 7 changes no database schema; head remains `0004_report_scope`. The application still excludes opportunity persistence, scoring, prioritization, recommendations, Decision Engine logic, AI calls, GSC/GA4 APIs, WordPress, outreach, scheduling, and execution.
+上传沿用 5 MiB 与 10,000 行限制、临时处理及合成测试。站点标识是明确证据，不是已认证属性归属。未知或不支持来源元数据、来源准确性、完整页面导出、统计显著性与未观察变化不能获证明。真实导出、凭据及临时数据保留在 Git 之外。第七阶段不改变数据库结构；最新修订仍为 `0004_report_scope`。应用仍不包含机会持久化、评分、优先级、建议、决策引擎逻辑、AI 调用、GSC/GA4 API、WordPress、外链联系、调度及执行。
 
-## Suggested Phase 7 / 建议的第七阶段
+## Suggested Phase 8 boundary / 建议的第八阶段边界
 
-The next bounded step is an evidence-first SEO Opportunity Engine: define a small deterministic opportunity taxonomy and explicit evidence requirements, generate reviewable page-level candidates only when scope/coverage/readiness supports the rule, and preserve source IDs and explanations. Keep insufficient evidence explicit. Defer opportunity scoring, prioritization, AI, recommendations that execute changes, and integrations until separately specified. Phase 7 has not started.
-下一项有界步骤为证据优先的 SEO 机会引擎：定义小型确定性机会分类及明确证据要求，仅在范围、覆盖与就绪度支持规则时，生成可审阅页面级候选，并保留来源 ID 与解释。明确保留证据不足。机会评分、优先级、AI、执行修改的建议及集成延后至分别定义范围。第七阶段尚未开始。
+The next separately specified step should calibrate the four heuristic rules against authorized site evidence and define transparent prioritization, if desired. Decide explicitly whether candidates stay runtime-only or require versioned persisted lifecycle before adding any writes. Recommendation policy must be scoped separately from detection and prioritization; keep integrations, AI, and execution deferred. Phase 8 is not implemented.
+下一项另行定义的步骤应根据已授权站点证据校准四种启发式规则，并在需要时定义透明优先级。在添加任何写入之前，应明确决定候选继续保持运行时形式，还是需要带版本的持久化生命周期。建议策略必须与检测及优先级分别定义范围；集成、AI 及执行继续延后。第八阶段未实现。

@@ -1,3 +1,3 @@
-"""Descriptive performance comparisons remain separate from scoring and decisions.
-描述性的性能比较与评分和决策相互独立。
+"""Compare evidence and detect factual signals separately from scoring and decisions.
+比较证据并检测事实信号，与评分和决策保持独立。
 """

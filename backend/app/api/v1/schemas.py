@@ -214,6 +214,69 @@ class PageProvenanceResponse(BaseModel):
     observations: list[QualityObservationResponse]
 
 
+class OpportunityEvidenceResponse(BaseModel):
+    """Expose only rule inputs, measured changes, and transparent heuristic thresholds.
+    仅公开规则输入、已测量变化及透明的启发式阈值。
+    """
+
+    previous: dict[str, int | Decimal]
+    current: dict[str, int | Decimal]
+    changes: dict[str, int | Decimal]
+    thresholds: dict[str, int | Decimal]
+
+
+class OpportunityCandidateResponse(BaseModel):
+    """Describe a runtime factual signal without scores, priorities, or proposed actions.
+    描述运行时事实信号，不包含评分、优先级或拟议行动。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    opportunity_type: Literal[
+        "traffic_decline", "ctr_opportunity", "ranking_decline", "impression_growth_gap"
+    ]
+    page_id: UUID
+    site_id: UUID | None
+    url: str
+    previous_snapshot_id: UUID
+    current_snapshot_id: UUID
+    previous_period_start: date
+    previous_period_end: date
+    current_period_start: date
+    current_period_end: date
+    evidence_readiness: Literal["ready"]
+    scope_compatibility: Literal["compatible"]
+    reason_code: str
+    message: str
+    evidence: OpportunityEvidenceResponse
+
+
+class PageOpportunityAnalysisResponse(BaseModel):
+    """Keep unavailable evidence distinct from an eligible comparison with zero signals.
+    将证据不可用与合格比较下零信号的有效结果区分开。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    page_id: UUID
+    site_id: UUID | None
+    url: str
+    eligible: bool
+    evidence_readiness: Literal["insufficient", "limited", "ready"]
+    gate_reasons: list[str]
+    gate_observations: list[QualityObservationResponse]
+    comparison: PerformanceComparisonResponse | None
+    candidates: list[OpportunityCandidateResponse]
+
+
+class OpportunityCandidateList(BaseModel):
+    items: list[OpportunityCandidateResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+
+
 class PagePerformanceHistory(BaseModel):
     current_page: WebsitePageResponse
     items: list[PerformanceSnapshotResponse]
@@ -225,3 +288,4 @@ class PagePerformanceHistory(BaseModel):
     comparison_unavailable_reason: str | None
     quality: PageQualityResponse
     provenance: PageProvenanceResponse
+    opportunities: PageOpportunityAnalysisResponse

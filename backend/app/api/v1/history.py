@@ -8,7 +8,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.analysis.current_provenance import RecordedMetricSource, analyse_current_provenance
-from app.analysis.data_quality import ImportEvidence, analyse_import_quality, analyse_page_quality
+from app.analysis.data_quality import (
+    ImportEvidence,
+    PageQuality,
+    analyse_import_quality,
+    analyse_page_quality,
+)
+from app.analysis.opportunity_engine import analyse_page_opportunities
 from app.analysis.performance_comparison import (
     ComparisonOutcome,
     PerformanceObservation,
@@ -18,6 +24,7 @@ from app.api.v1.schemas import (
     ImportQualityResponse,
     ImportRunList,
     ImportRunResponse,
+    PageOpportunityAnalysisResponse,
     PagePerformanceHistory,
     PageProvenanceResponse,
     PageQualityCounts,
@@ -40,6 +47,8 @@ class LoadedPageHistory:
     comparison: ComparisonOutcome
     quality: PageQualityResponse
     provenance: PageProvenanceResponse | None
+    observations: list[PerformanceObservation]
+    analysed_quality: PageQuality
 
 
 def _database_unavailable() -> HTTPException:
@@ -81,6 +90,18 @@ def _load_page_history(
         )
     except SQLAlchemyError:
         raise _database_unavailable() from None
+    return _analyse_page_history(website_page, records, sources if include_provenance else None)
+
+
+def _analyse_page_history(
+    website_page: WebsitePage,
+    records: list[tuple[PagePerformanceSnapshot, ImportRun]],
+    sources: list[PageMetricProvenance] | None = None,
+) -> LoadedPageHistory:
+    """Share comparison and readiness analysis between individual and grouped reads.
+    在单页与分组读取之间共享比较和就绪度分析。
+    """
+    page_id = website_page.id
     observations = [
         PerformanceObservation(
             id=snapshot.id,
@@ -118,7 +139,7 @@ def _load_page_history(
         readiness_reasons=analysed.readiness_reasons,
     )
     provenance = None
-    if include_provenance:
+    if sources is not None:
         analysed_provenance = analyse_current_provenance(
             page_id=page_id,
             current_values={
@@ -135,7 +156,62 @@ def _load_page_history(
             ],
         )
         provenance = PageProvenanceResponse.model_validate(analysed_provenance)
-    return LoadedPageHistory(website_page, records, outcome, quality, provenance)
+    return LoadedPageHistory(
+        website_page, records, outcome, quality, provenance, observations, analysed
+    )
+
+
+def _load_grouped_page_histories(
+    session: Session, *, site_id: UUID | None = None
+) -> list[LoadedPageHistory]:
+    """Batch page histories in two reads without paginating pages before candidate detection.
+    使用两次读取批量载入页面历史，不在候选检测前对页面分页。
+
+    Full histories remain in memory for development scale; no candidate cache is stored.
+    开发规模下完整历史保留于内存中，不存储候选缓存。
+    """
+    pages_statement = select(WebsitePage).order_by(WebsitePage.url, WebsitePage.id)
+    records_statement = (
+        select(PagePerformanceSnapshot, ImportRun)
+        .join(ImportRun, ImportRun.id == PagePerformanceSnapshot.import_run_id)
+        .join(WebsitePage, WebsitePage.id == PagePerformanceSnapshot.page_id)
+        .order_by(
+            PagePerformanceSnapshot.page_id, ImportRun.imported_at, PagePerformanceSnapshot.id
+        )
+    )
+    if site_id is not None:
+        pages_statement = pages_statement.where(WebsitePage.site_id == site_id)
+        records_statement = records_statement.where(WebsitePage.site_id == site_id)
+    try:
+        website_pages = session.scalars(pages_statement).all()
+        grouped = {website_page.id: [] for website_page in website_pages}
+        for snapshot, run in session.execute(records_statement):
+            # Concurrent newly created pages are omitted from this request's page set.
+            # 并发新建页面不加入本次请求已载入的页面集合。
+            if snapshot.page_id in grouped:
+                grouped[snapshot.page_id].append((snapshot, run))
+    except SQLAlchemyError:
+        raise _database_unavailable() from None
+    return [
+        _analyse_page_history(website_page, grouped[website_page.id])
+        for website_page in website_pages
+    ]
+
+
+def _page_opportunities(loaded: LoadedPageHistory) -> PageOpportunityAnalysisResponse:
+    """Reuse the exact selected comparison and quality facts without another database read.
+    复用完全相同的所选比较与质量事实，不增加数据库读取。
+    """
+    return PageOpportunityAnalysisResponse.model_validate(
+        analyse_page_opportunities(
+            page_id=loaded.page.id,
+            site_id=loaded.page.site_id,
+            url=loaded.page.url,
+            observations=loaded.observations,
+            outcome=loaded.comparison,
+            quality=loaded.analysed_quality,
+        )
+    )
 
 
 @router.get(
@@ -255,6 +331,7 @@ def page_performance(
         comparison_unavailable_reason=outcome.unavailable_reason,
         quality=loaded.quality,
         provenance=loaded.provenance,
+        opportunities=_page_opportunities(loaded),
     )
 
 

@@ -177,5 +177,5 @@ Phase 5 extends the same transaction to provenance. Each supplied non-`NULL` fie
 A `blocking` historical quality observation means comparison evidence is unavailable, without invalidating a successful import. Current provenance observations remain separate from comparison readiness and are not persisted. See [data-quality.md](data-quality.md) and [current-provenance.md](current-provenance.md).
 `blocking` 历史质量观察表示对比证据不可用，不否定成功导入。当前来源观察保持独立于对比就绪度，不持久化。详见 [data-quality.md](data-quality.md) 与 [current-provenance.md](current-provenance.md)。
 
-Phase 6 contains no SEO judgments, scoring, opportunities, recommendations, AI, GSC API integration, query import, editing/deletion, account management, background jobs, or execution. Phase 7 has not started.
-第六阶段不包含 SEO 判断、评分、机会、建议、AI、GSC API 集成、查询导入、编辑删除、账户管理、后台任务或执行。第七阶段尚未开始。
+Phase 6 contained no SEO judgments, scoring, opportunities, recommendations, AI, GSC API integration, query import, editing/deletion, account management, background jobs, or execution. Phase 7 adds a separate read-only runtime [Opportunity Engine](opportunity-engine.md) consuming selected historical comparison and readiness, without changing import persistence, duplicates, scope, coverage, or provenance. The importer never generates or stores candidates. Scores, priorities, recommendations, AI, integrations, and execution remain unimplemented.
+第六阶段不包含 SEO 判断、评分、机会、建议、AI、GSC API 集成、查询导入、编辑删除、账户管理、后台任务或执行。第七阶段增加独立只读运行时[机会引擎](opportunity-engine.md)，使用所选历史对比及就绪度，不改变导入持久化、重复、范围、覆盖或来源。导入器绝不生成或存储候选。评分、优先级、建议、AI、集成及执行仍未实现。

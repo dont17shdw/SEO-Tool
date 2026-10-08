@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SEO Tool · Phase 5",
+  title: "SEO Tool · Phase 7",
   description: "SEO Tool development foundation / SEO Tool 开发基础",
 };
 
@@ -16,6 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Link href="/imports/gsc">Import GSC / 导入 GSC</Link>
           <Link href="/pages">Pages / 页面</Link>
           <Link href="/imports/history">Import history / 导入历史</Link>
+          <Link href="/opportunities">Opportunities / 机会</Link>
         </nav>
         {children}
       </body>
