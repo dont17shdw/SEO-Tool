@@ -11,6 +11,9 @@
 Historical source identifiers are `source="gsc"`, `source_type="pages_performance"`, and `reporting_window="latest_28_days"`. The preview retains `source="gsc_pages"`. Both use the existing English/Chinese GSC importer and deterministic normalization.
 历史来源标识为 `source="gsc"`、`source_type="pages_performance"` 与 `reporting_window="latest_28_days"`。预览保留 `source="gsc_pages"`。两者使用现有英文与中文 GSC 导入器及确定性标准化。
 
+The legacy `latest_28_days` literal identifies the existing 28-day metric family; it does not establish upload-relative dates. Phase 8's recognized custom 28-day XLSX periods use the same literal. No historical identifier, stored period, scope fingerprint, duplicate key, comparison rule, or provenance link is rewritten.
+旧 `latest_28_days` 字面值标识已有 28 天指标类别，不建立相对于上传时间的日期。第八阶段已识别自定义 28 天 XLSX 时间段使用相同字面值。不重写历史标识、已存储时间段、范围指纹、重复键、对比规则或来源关联。
+
 ## Successful-import lifecycle / 成功导入生命周期
 
 1. Preview parses, validates, normalizes, and extracts available reporting scope, dates, and coverage without database access or history writes.
@@ -35,8 +38,8 @@ The raw hash represents uploaded bytes, not the filename or semantic equality of
 
 ## Reporting-period extraction / 报告时间段提取
 
-The latest-28-day filter validation from Phase 2 remains unchanged. Separately, GSC-specific extraction examines normalized worksheet names `Chart`, `Date`, `Dates`, `图表`, and `日期`. The first nonblank row must contain exactly one recognized `Date`, `Dates`, or `日期` header. Sheets without recognized date headers provide no evidence.
-第二阶段的最近 28 天筛选校验保持不变。另由 GSC 专用提取检查标准化工作表名称 `Chart`、`Date`、`Dates`、`图表` 与 `日期`。首个非空白行必须包含恰好一个已识别的 `Date`、`Dates` 或 `日期` 表头。没有已识别日期表头的工作表不提供证据。
+Phase 8 extends filter-label validation to recognized explicit custom 28-day ranges and bare custom labels with independently complete coverage; existing latest labels remain accepted. This validation never supplies observed dates. Separately, unchanged GSC-specific extraction examines normalized worksheet names `Chart`, `Date`, `Dates`, `图表`, and `日期`. The first nonblank row must contain exactly one recognized `Date`, `Dates`, or `日期` header. Sheets without recognized date headers provide no evidence. Exact supported labels and conflict handling are in [gsc-import.md](gsc-import.md).
+第八阶段将筛选标签校验扩展至已识别明确自定义 28 天范围，以及具有独立完整覆盖的单独自定义标签；已有最近日期标签继续受接受。此校验绝不提供已观察日期。另由不变的 GSC 专用提取检查标准化工作表名称 `Chart`、`Date`、`Dates`、`图表` 与 `日期`。首个非空白行必须包含恰好一个已识别的 `Date`、`Dates` 或 `日期` 表头。没有已识别日期表头的工作表不提供证据。准确支持标签及冲突处理详见 [gsc-import.md](gsc-import.md)。
 
 Date cells accept native Excel dates/datetimes (use their calendar date) or trimmed strict `YYYY-MM-DD` text. Ignore fully blank rows. Every nonblank data row must contain a valid date; missing, malformed, formula, or non-date values make the period unknown rather than inventing a date. Unsorted dates and duplicate days are allowed. Use the earliest and latest observed dates without requiring 28 unique or consecutive days.
 日期单元格接受原生 Excel 日期或日期时间（使用其日历日期），或去除前后空白的严格 `YYYY-MM-DD` 文本。忽略完全空白行。每个非空白数据行都必须包含有效日期；缺失、格式错误、公式或非日期值使时间段未知，不编造日期。允许未排序日期与重复天数。使用最早与最晚已观察日期，不要求 28 个唯一或连续日期。
@@ -127,3 +130,6 @@ This is a local development history interface. Explicit scope is recorded eviden
 
 Phase 7 embeds `opportunities` in the page-performance response, reusing the exact selected comparison and readiness without changing either. Its separate runtime engine emits zero or more factual signals only for ready, compatible, complete observed 28-day evidence. It does not substitute current applied state, choose another pair, rank candidates, or persist `SEOOpportunity` rows. The performance loader still uses three SELECTs including provenance; the page view needs no extra opportunity request. See [opportunity-engine.md](opportunity-engine.md).
 第七阶段在页面性能响应中内嵌 `opportunities`，复用准确所选对比及就绪度，不改变二者。独立运行时引擎仅使用就绪、兼容且具有完整已观察 28 天覆盖的证据，生成零个或多个事实信号。不替换为当前应用状态、不另选对、不对候选排序价值，也不持久化 `SEOOpportunity` 行。性能读取流程仍使用包含来源在内的三个 SELECT；页面视图无需额外机会请求。详见 [opportunity-engine.md](opportunity-engine.md)。
+
+Phase 8's separate [priority listing](opportunity-prioritization.md) adds attention tiers to those existing candidates without changing the neutral or page-performance contracts. Two non-overlapping custom periods can now follow normal preview/Apply, but partial coverage, unknown/conflicting scope, overlap, missing metrics, zero baselines, and relevant out-of-order evidence still prevent ready opportunity detection. No history or priority migration is added.
+第八阶段独立[优先级列表](opportunity-prioritization.md) 为这些已有候选增加关注层级，不改变中立或页面性能契约。两个互不重叠自定义时间段现在可使用正常预览与应用流程，但部分覆盖、未知或冲突范围、重叠、缺失指标、零基准及相关乱序证据仍阻止就绪机会检测。不增加历史或优先级迁移。

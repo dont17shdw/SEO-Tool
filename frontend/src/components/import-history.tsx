@@ -37,7 +37,7 @@ export function ImportHistory() {
                     <td><time dateTime={run.imported_at}>{formatImportTime(run.imported_at)}</time></td>
                     <td className="url-cell">{run.filename}<br /><small>Import ID / 导入 ID：{run.id}</small></td>
                     <td>GSC · Pages / 网页</td>
-                    <td>Latest 28 days / 最近 28 天<br />{formatPeriod(run)}</td>
+                    <td>28-day report / 28 天报告<br />{formatPeriod(run)}</td>
                     <td className="url-cell">
                       <p>{run.report_scope.property_id ?? "Unknown property / 属性未知"}<br />{formatCoverage(run)}</p>
                       <details className="quality-details"><summary>Inspect report scope / 查看报告范围</summary>

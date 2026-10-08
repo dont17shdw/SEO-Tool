@@ -6,7 +6,6 @@ import csv
 import hashlib
 import io
 import json
-import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -17,7 +16,6 @@ from openpyxl import load_workbook
 
 from app.imports.gsc.mapping import (
     COLUMN_ALIASES,
-    FILTER_SHEET_NAMES,
     NON_PAGE_SHEET_NAMES,
     PAGE_SHEET_NAMES,
     map_columns,
@@ -30,6 +28,7 @@ from app.imports.gsc.period import (
 )
 from app.imports.gsc.schemas import ImportPreview, NormalizedGSCRow, ParsedImport, RowError
 from app.imports.gsc.scope import ScopeEvidenceError, extract_workbook_scope, resolve_scope
+from app.imports.gsc.window import ReportingWindowError, validate_reporting_window
 from app.normalization.gsc import (
     InvalidGSCValue,
     is_blank,
@@ -140,32 +139,6 @@ def _sheet_rows(sheet: Any) -> tuple[Sequence[Any], RawRows]:
     return _read_table(sheet.iter_rows(values_only=True))
 
 
-def _validate_window(workbook: Any) -> None:
-    """Reject conflicting date metadata; absent metadata uses the documented 28-day assumption.
-    拒绝冲突的日期元数据；缺失元数据时采用文档约定的 28 天假设。
-    """
-    for name in workbook.sheetnames:
-        if normalize_label(name) not in FILTER_SHEET_NAMES:
-            continue
-        sheet = workbook[name]
-        sheet.reset_dimensions()
-        for count, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-            if count > MAX_ROWS:
-                raise ImportFileError("too_many_rows", "The Filters worksheet is too large.")
-            if not row or normalize_label(row[0]) not in {"date", "dates", "date range", "日期"}:
-                continue
-            value = row[1] if len(row) > 1 else None
-            if is_blank(value):
-                continue
-            compact = re.sub(r"[\s_-]+", "", normalize_label(value))
-            if compact not in {"last28days", "past28days", "28days", "过去28天", "最近28天"}:
-                raise ImportFileError(
-                    "unsupported_reporting_window",
-                    "This import supports only the latest 28 days; "
-                    "export GSC using that date filter.",
-                )
-
-
 def _has_page_url(rows: RawRows, url_index: int) -> bool:
     """Require actual URL evidence rather than selecting a sheet from metric headers alone.
     要求实际的 URL 证据，避免仅根据指标列名选择工作表。
@@ -192,11 +165,11 @@ def _read_xlsx(content: bytes) -> SourceTable:
         # GSC exports contain observed values; formulas are rejected rather than evaluated.
         # GSC 导出包含观测值；拒绝公式，不对公式求值。
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
-        _validate_window(workbook)
         try:
             evidence = extract_reporting_evidence(workbook, MAX_ROWS)
         except PeriodWorksheetTooLarge as exc:
             raise ImportFileError("too_many_rows", str(exc)) from exc
+        validate_reporting_window(workbook, evidence, MAX_ROWS)
         observed_scope, scope_issues = extract_workbook_scope(workbook, MAX_ROWS)
         for preferred in PAGE_SHEET_NAMES:
             for name in workbook.sheetnames:
@@ -233,6 +206,8 @@ def _read_xlsx(content: bytes) -> SourceTable:
     except ImportFileError:
         raise
     except ScopeEvidenceError as exc:
+        raise ImportFileError(exc.code, exc.message) from exc
+    except ReportingWindowError as exc:
         raise ImportFileError(exc.code, exc.message) from exc
     except BadZipFile as exc:
         raise ImportFileError("malformed_xlsx", "XLSX is not a readable Excel workbook.") from exc

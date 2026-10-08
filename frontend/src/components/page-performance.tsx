@@ -111,7 +111,7 @@ export function PagePerformance({ pageId }: { pageId: string }) {
                   <tbody>{data.items.map((snapshot) => (
                     <tr key={snapshot.id}>
                       <td><time dateTime={snapshot.imported_at}>{formatImportTime(snapshot.imported_at)}</time></td>
-                      <td>Latest 28 days / 最近 28 天<br />{formatPeriod(snapshot)}</td>
+                      <td>28-day report / 28 天报告<br />{formatPeriod(snapshot)}</td>
                       <td className="url-cell"><p>{snapshot.report_scope.property_id ?? "Unknown property / 属性未知"}<br />{formatCoverage(snapshot)}</p>
                         <details className="quality-details"><summary>Inspect report scope / 查看报告范围</summary>
                           <ReportScopeSummary scope={snapshot.report_scope} coverage={snapshot} showEvidence />

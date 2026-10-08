@@ -183,7 +183,7 @@ def test_recognized_latest_28_day_metadata_is_accepted(value):
     assert parse_gsc_pages(content, "pages.xlsx").preview.can_apply
 
 
-@pytest.mark.parametrize("value", ["Last 7 days", "过去 3 个月", "2026-01-01 to 2026-01-28"])
+@pytest.mark.parametrize("value", ["Last 7 days", "过去 3 个月", "2026-01-01 to 2026-01-29"])
 def test_conflicting_date_metadata_is_rejected(value):
     content = xlsx_file(
         {

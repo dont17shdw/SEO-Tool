@@ -135,9 +135,10 @@ export function GscImport() {
       <section className="card" aria-labelledby="upload-heading">
         <h2 id="upload-heading">1. Select and preview / 选择并预览</h2>
         <p>
-          Export the GSC Pages report for the latest 28 days. English and Chinese CSV/XLSX exports are supported.
-          <span lang="zh"> 请导出最近 28 天的 GSC 网页报告。支持英文和中文 CSV/XLSX 导出。</span>
+          Export the GSC Pages report for the latest 28 days or a supported custom 28-day calendar range. English and Chinese CSV/XLSX exports are supported.
+          <span lang="zh"> 请导出最近 28 天或受支持的自定义 28 个日历日范围的 GSC 网页报告。支持英文和中文 CSV/XLSX 导出。</span>
         </p>
+        <p>For opportunity analysis, use two non-overlapping 28-day XLSX reports with matching property, search type, and complete non-date filters. Preview must show 28 consecutive observed dates for each; declared bounds alone do not prove coverage. 机会分析需要两个不重叠的 28 天 XLSX 报告，属性、搜索类型及完整非日期筛选一致。每次预览必须显示 28 个连续已观察日期；仅有声明起止日期不能证明覆盖。</p>
         <p>
           Preview validates only; it does not save any pages. Limit: 5 MiB and 10,000 data rows.
           <span lang="zh"> 预览仅做校验，不会保存页面。限制为 5 MiB 和 10,000 行数据。</span>
@@ -160,7 +161,7 @@ export function GscImport() {
           <dl className="summary-grid">
             <div><dt>Source / 数据源</dt><dd>Google Search Console Pages / 网页</dd></div>
             <div><dt>Sheet / 工作表</dt><dd>{preview.detected_sheet ?? "CSV (no sheet) / CSV（无工作表）"}</dd></div>
-            <div><dt>Window / 时间窗口</dt><dd>Latest 28 days / 最近 28 天</dd></div>
+            <div><dt>Window / 时间窗口</dt><dd>28-day report family / 28 天报告类别</dd></div>
             <div><dt>Exact report dates / 精确报告日期</dt><dd>{formatPeriod(preview)}</dd></div>
             <div><dt>Total rows / 总行数</dt><dd>{preview.total_rows}</dd></div>
             <div><dt>Valid rows / 有效行</dt><dd>{preview.valid_rows}</dd></div>
@@ -214,7 +215,7 @@ export function GscImport() {
               <p>Blank metrics stay NULL for new pages and preserve existing values for matched URLs. 空白指标在新页面中保持 NULL，在匹配到的现有 URL 中保留原值。</p>
               <label className="checkbox-label">
                 <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={stage !== "idle" || result !== null} />
-                <span>I confirm this is the latest 28-day Pages report and want to import the previewed file with the scope shown above. 我确认这是最近 28 天的网页报告，并希望使用上方显示的范围导入当前预览文件。</span>
+                <span>I confirm this is a supported 28-day Pages report and want to import the previewed file with the dates and scope shown above. 我确认这是受支持的 28 天网页报告，并希望使用上方显示的日期与范围导入当前预览文件。</span>
               </label>
               <button type="button" onClick={importFile} disabled={!confirmed || stage !== "idle" || result !== null}>
                 {stage === "applying" ? "Importing… / 导入中……" : "Import / 导入"}
