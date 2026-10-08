@@ -2,14 +2,14 @@
 
 ## Scope and boundary / 范围与边界
 
-Phase 4 explains the factual evidence available for descriptive GSC page-performance comparison: known dates, compatible history, missing metrics, overlap, repeated periods, import chronology, and zero percentage baselines. It produces no SEO quality label, opportunity, priority, action, numeric score, or AI output.
-第四阶段解释可用于描述性 GSC 页面性能对比的事实证据：已知日期、兼容历史、缺失指标、重叠、重复时间段、导入时间顺序及零百分比基准。不产生 SEO 质量标签、机会、优先级、行动、数值评分或 AI 输出。
+Phase 4 established factual evidence checks for descriptive GSC page-performance comparison: dates, history, missing metrics, overlap, repeated periods, import chronology, and zero percentage baselines. Phase 6 additionally checks explicit report scope and observed daily-date coverage. The result describes evidence readiness, without an SEO quality label, opportunity, priority, action, numeric score, or AI output.
+第四阶段建立描述性 GSC 页面性能对比的事实证据检查：日期、历史、缺失指标、重叠、重复时间段、导入时间顺序及零百分比基准。第六阶段额外检查明确报告范围与已观察每日日期覆盖。结果描述证据就绪度，不包含 SEO 质量标签、机会、优先级、行动、数值评分或 AI 输出。
 
-`analysis/performance_comparison.py` continues to select the Phase 3 pair and calculate changes. `analysis/data_quality.py` consumes the comparison result, full snapshot history, and import metadata to explain evidence limitations. It neither duplicates arithmetic nor changes the selected pair. The analysis functions are deterministic and have no database access, writes, external calls, or observation persistence.
-`analysis/performance_comparison.py` 继续选择第三阶段对比对并计算变化。`analysis/data_quality.py` 使用对比结果、完整快照历史及导入元数据解释证据限制。它既不重复计算，也不改变所选对。分析函数具有确定性，不访问数据库、不写入、不调用外部服务，也不持久化观察。
+`analysis/performance_comparison.py` selects the pair using the Phase 3 date rules refined by Phase 6 scope compatibility, then calculates changes. `analysis/data_quality.py` consumes that result, rejected scope-conflict witnesses, full snapshot history, and joined import metadata to explain evidence limitations. It neither duplicates arithmetic nor changes the selected pair. The analysis functions are deterministic and have no database access, writes, external calls, or observation persistence.
+`analysis/performance_comparison.py` 使用第六阶段范围兼容性细化后的第三阶段日期规则选择对比对，再计算变化。`analysis/data_quality.py` 使用该结果、被拒绝范围冲突证据、完整快照历史及连接的导入元数据，解释证据限制。它既不重复计算，也不改变所选对。分析函数具有确定性，不访问数据库、不写入、不调用外部服务，也不持久化观察。
 
-Phase 4 quality needed no migration. Phase 5 adds `0003_current_metric_provenance` for explicit current-source links, while preserving these historical quality rules. Quality requests still read existing history without filling `NULL`, rewriting rows, or creating `SEOOpportunity` records. Current provenance is a separate runtime result, not an input to comparison readiness.
-第四阶段质量无需迁移。第五阶段为明确当前来源关联增加 `0003_current_metric_provenance`，同时保留这些历史质量规则。质量请求仍读取已有历史，不填补 `NULL`、不重写行，也不创建 `SEOOpportunity` 记录。当前来源为独立运行时结果，不是对比就绪度输入。
+Phase 4 quality needed no migration. Phase 5 added `0003_current_metric_provenance`; Phase 6 head `0004_report_scope` stores report-level scope/coverage evidence on `ImportRun` and preserves existing current-source links. Quality requests still read existing history without filling `NULL`, rewriting rows, or creating `SEOOpportunity` records. Current provenance remains a separate runtime result, not an input to comparison readiness.
+第四阶段质量无需迁移。第五阶段增加 `0003_current_metric_provenance`；第六阶段最新修订 `0004_report_scope` 在 `ImportRun` 上存储报告级范围与覆盖证据，并保留已有当前来源关联。质量请求仍读取已有历史，不填补 `NULL`、不重写行，也不创建 `SEOOpportunity` 记录。当前来源仍为独立运行时结果，不是对比就绪度输入。
 
 ## Observation contract / 观察契约
 
@@ -27,53 +27,61 @@ Severity concerns evidence, without any judgment about page performance. `scope`
 
 ## Page observation codes / 页面观察代码
 
-Page history is scoped by actual `page_id`. Exact-period grouping uses page, source, source type, reporting window, and both date bounds. Comparison compatibility additionally requires equal period lengths, as defined in [performance-history.md](performance-history.md).
-页面历史按实际 `page_id` 限定。准确时间段分组使用页面、来源、来源类型、报告窗口及两个日期边界。对比兼容性还要求时间段长度相同，定义见 [performance-history.md](performance-history.md)。
+Page history is scoped by actual `page_id`. Revision and chronology groups use page, source, source type, reporting window, and canonical scope identity; revision groups also require both exact date bounds. Comparison additionally requires equal period lengths and excludes explicitly incompatible scope. Unknown scope is never labeled compatible. See [performance-history.md](performance-history.md) and [report-scope.md](report-scope.md).
+页面历史按实际 `page_id` 限定。修订与时间顺序组使用页面、来源、来源类型、报告窗口及规范范围身份；修订组还要求两个准确日期边界。对比额外要求时间段长度相同，并排除明确不兼容范围。未知范围绝不标为兼容。详见 [performance-history.md](performance-history.md) 与 [report-scope.md](report-scope.md)。
 
 | Code / 代码 | Severity / 严重程度 | Condition and evidence / 条件与证据 |
 | --- | --- | --- |
 | `insufficient_history` | `blocking` | Phase 3 supplied no compatible comparison. Evidence includes its unavailable reason and history counts; zero history, one observation, unknown dates, or only one compatible distinct period can cause this.<br>第三阶段未提供兼容对比。证据包含不可用原因与历史计数；零历史、一个观察、未知日期或只有一个兼容不同时间段均可能导致此情况。 |
+| `unknown_report_scope` | `warning` | At least one snapshot's joined run lacks a known property, search type, or complete non-date filter ledger. Evidence lists resolved scope and origins, plus selected compatibility when available. It lowers readiness only when the selected pair has `scope_compatibility="unknown"`.<br>至少一个快照关联导入缺少已知属性、搜索类型或完整非日期筛选清单。证据列出解析范围与来源，并在可用时提供所选兼容性。仅所选对具有 `scope_compatibility="unknown"` 时降低就绪度。 |
+| `incompatible_report_scope` | `warning` | Comparison selection rejected explicit scope conflicts. Evidence contains representative snapshot pairs and conflicting dimension names; it does not enumerate every possible conflicting pair. Rejected alternatives alone do not lower a valid selected pair's readiness.<br>对比选择拒绝明确范围冲突。证据包含代表性快照对及冲突维度名，不枚举全部可能冲突对。仅有被拒绝候选不会降低有效所选对的就绪度。 |
 | `unknown_reporting_dates` | `warning` | At least one snapshot lacks date endpoints. Evidence lists affected snapshot/run IDs, source/window, dates, import times, and count.<br>至少一个快照缺少起止日期。证据列出受影响快照与导入 ID、来源与窗口、日期、导入时间及数量。 |
+| `incomplete_date_coverage` | `warning` | At least one joined run has reliable but `partial` daily-date coverage. Evidence includes date count, consecutiveness, bounds, and run scope. It lowers readiness when either selected snapshot uses that run.<br>至少一个关联导入具有可靠但为 `partial` 的每日日期覆盖。证据包含日期数量、连续性、起止值及导入范围。任一所选快照使用该导入时，降低就绪度。 |
+| `unknown_date_coverage` | `warning` | At least one joined run has `unknown` observed coverage, including legacy or CSV imports. Exact endpoints can coexist with unknown coverage. It lowers readiness when either selected snapshot uses that run.<br>至少一个关联导入的已观察覆盖为 `unknown`，包括旧导入或 CSV 导入。准确起止值可与未知覆盖并存。任一所选快照使用该导入时，降低就绪度。 |
 | `overlapping_comparison_periods` | `warning` | The selected pair has inclusive overlap. Evidence names both periods and their overlap start/end; no other pair is substituted.<br>所选对存在包含起止日的重叠。证据标明两个时间段及重叠起止日期；不替换为其他对。 |
 | `missing_metrics` | `warning` | At least one snapshot has `NULL` clicks, impressions, CTR, or average position. Evidence maps snapshot IDs to missing field names and counts snapshots, not missing cells.<br>至少一个快照的点击数、展示数、点击率或平均排名为 `NULL`。证据将快照 ID 映射到缺失字段名，统计快照数，不统计缺失单元格数。 |
 | `zero_percentage_baseline` | `warning` | In the selected pair, previous clicks or impressions are known zero and the current count is known, including zero. Evidence identifies each metric and both values; percentage change remains `null`.<br>所选对的此前点击数或展示数为已知零，且当前计数已知，包括零。证据标识各指标与两个值；百分比变化保持 `null`。 |
-| `same_period_revisions` | `info` | An exact-period group has more than one distinct import ID for the page. Evidence lists each source/window/date group and its snapshot/run IDs. Phase 3 retains the latest imported revision for selection only.<br>页面的准确时间段组具有多个不同导入 ID。证据列出各来源、窗口、日期组及其快照与导入 ID。第三阶段仅在选择时使用最近导入的修订。 |
-| `out_of_order_import` | `warning` | A snapshot with an older `period_end` was imported strictly after a snapshot with a newer end in the same page/source/type/window group. Evidence pairs each offending older snapshot with one earlier-imported newer-period witness.<br>在同一页面、来源、类型、窗口组内，具有较早 `period_end` 的快照严格晚于具有较新结束日期的快照导入。证据将每个乱序旧快照与一个较早导入的较新时间段证据配对。 |
+| `same_period_revisions` | `info` | An exact-period and canonical-scope group has more than one distinct import ID for the page. Evidence lists each group, snapshot/run IDs, and scope compatibility. Selection retains the latest imported revision only; equal unknown scope identities remain visibly uncertain.<br>页面的准确时间段与规范范围组具有多个不同导入 ID。证据列出各组、快照与导入 ID 及范围兼容性。选择仅保留最近导入的修订；相等未知范围身份仍明确保持不确定。 |
+| `out_of_order_import` | `warning` | A snapshot with an older `period_end` was imported strictly after a newer-ended snapshot in the same page/source/type/window/canonical-scope group. Evidence pairs each offending older snapshot with one earlier-imported newer-period witness and exposes their scope compatibility.<br>在同一页面、来源、类型、窗口与规范范围组内，具有较早 `period_end` 的快照严格晚于具有较新结束日期的快照导入。证据将每个乱序旧快照与一个较早导入的较新时间段证据配对，并公开范围兼容性。 |
 
 Equal `imported_at` timestamps cannot prove out-of-order chronology. IDs may break display ties but do not create temporal evidence. Same-period revisions have matching ends and do not establish an older-period case. Unknown dates are excluded from overlap/revision/chronology checks requiring exact dates.
 相同 `imported_at` 时间戳不能证明乱序时间顺序。ID 可处理显示并列，但不创建时间证据。同时间段修订的结束日期相同，不构成较早时间段情况。未知日期从需要准确日期的重叠、修订与时间顺序检查中排除。
 
 ## Exact page-readiness rules / 准确的页面就绪度规则
 
-Readiness applies to the exact pair selected by Phase 3, not to every snapshot in history. It uses no numerical score or SEO threshold.
-就绪度应用于第三阶段选中的准确对，不应用于历史中的每个快照。不使用数值评分或 SEO 阈值。
+Readiness applies to the exact pair selected by the scope-aware comparison, not to every snapshot in history. It uses no numerical score or SEO threshold.
+就绪度应用于考虑范围的对比选中的准确对，不应用于历史中的每个快照。不使用数值评分或 SEO 阈值。
 
 | State / 状态 | Deterministic rule / 确定性规则 |
 | --- | --- |
-| `insufficient` | No Phase 3 compatible exact-period comparison exists; `readiness_reasons` contains `insufficient_history` and `selected_snapshot_ids` is empty.<br>不存在第三阶段兼容准确时间段对比；`readiness_reasons` 包含 `insufficient_history`，`selected_snapshot_ids` 为空。 |
-| `limited` | A comparison exists and its selected pair overlaps, has any missing metric, has a known zero previous count with known current count, or contains an offending older snapshot proven imported after newer evidence (either selected previous or current snapshot).<br>对比存在，且所选对重叠、有任一缺失指标、有已知零此前计数与已知当前计数，或包含已证明在较新证据之后导入的乱序旧快照（所选此前或当前快照均适用）。 |
-| `ready` | A compatible exact-period comparison exists and none of those selected-pair caveats applies.<br>存在兼容准确时间段对比，且不适用上述所选对限制。 |
+| `insufficient` | No eligible exact-period comparison exists; `readiness_reasons` contains `insufficient_history` and `selected_snapshot_ids` is empty. Explicitly incompatible reports never form a selected pair.<br>不存在合格准确时间段对比；`readiness_reasons` 包含 `insufficient_history`，`selected_snapshot_ids` 为空。明确不兼容报告绝不构成所选对。 |
+| `limited` | A comparison exists and its scope compatibility is unknown, either selected run has partial/unknown observed coverage, or the pair overlaps, has a missing metric, has a known zero previous count with known current count, or contains an offending older snapshot proven imported after newer evidence.<br>对比存在，且范围兼容性未知、任一所选导入已观察覆盖为部分或未知，或所选对重叠、缺少指标、具有已知零此前计数与已知当前计数，或包含已证明在较新证据之后导入的乱序旧快照。 |
+| `ready` | An eligible comparison has proven matching property/search/full-filter scope, both reports have complete observed 28-day coverage, and none of the previous selected-pair caveats applies.<br>合格对比具有已证明匹配的属性、搜索及完整筛选范围，两个报告均有完整已观察 28 天覆盖，且不适用此前所选对限制。 |
 
-Unknown dates, missing metrics, and out-of-order offenders outside the selected pair remain visible observations without automatically lowering readiness. A selected snapshot used only as a newer-period witness does not trigger an out-of-order readiness reason. Same-period revision information alone does not lower readiness. Thus a `ready` response may still contain historical `warning` or `info` observations; `readiness_reasons` identifies precisely which codes affect the selected pair.
-所选对之外的未知日期、缺失指标及乱序旧快照保留为可见观察，不自动降低就绪度。所选快照如果仅作为较新时间段证据，不触发乱序就绪度原因。仅有同时间段修订信息不会降低就绪度。因此 `ready` 响应仍可包含历史 `warning` 或 `info` 观察；`readiness_reasons` 准确标识影响所选对的代码。
+Historical unknown scope/dates/coverage, partial coverage, missing metrics, and out-of-order offenders outside the selected pair remain visible without automatically lowering readiness. A selected snapshot used only as a newer-period witness does not trigger an out-of-order readiness reason. Same-period revision information and rejected incompatible alternatives alone do not lower readiness. Thus a `ready` response may still contain historical `warning` or `info` observations; `readiness_reasons` identifies precisely which stable codes affect the selected pair.
+所选对之外的历史未知范围、日期或覆盖、部分覆盖、缺失指标及乱序旧快照保持可见，不自动降低就绪度。所选快照如果仅作为较新时间段证据，不触发乱序就绪度原因。仅有同时间段修订信息与被拒绝的不兼容候选不会降低就绪度。因此 `ready` 响应仍可包含历史 `warning` 或 `info` 观察；`readiness_reasons` 准确标识影响所选对的稳定代码。
 
-`ready` means the stored dates and metric availability satisfy these checks. It does not certify source accuracy, matching GSC filters, complete exports, full 28-day coverage, statistical significance, or a page's SEO condition. Observed period bounds can be sparse and overlapping periods remain computable with a caveat.
-`ready` 表示存储日期与指标可用性满足这些检查。不证明来源准确性、GSC 筛选一致、导出完整性、完整 28 天覆盖、统计显著性或页面 SEO 状况。已观察的时间段范围可能稀疏，重叠时间段仍可计算并附带限制提示。
+`ready` means stored scope evidence, observed dates, and metric availability satisfy these checks. Scope evidence may include user declarations; it does not authenticate GSC access or independently verify the declaration. Complete coverage proves 28 distinct consecutive observed dates, not completeness of every page row. Readiness certifies neither source accuracy, statistical significance, causation, nor a page's SEO condition. Sparse endpoints can remain descriptively comparable, with partial coverage and `limited` readiness.
+`ready` 表示存储范围证据、已观察日期及指标可用性满足这些检查。范围证据可包含用户声明；不认证 GSC 访问，也不独立验证声明。完整覆盖证明 28 个不同连续的已观察日期，不证明每个页面行均完整。就绪度不证明来源准确性、统计显著性、因果关系或页面 SEO 状况。稀疏起止值仍可进行描述性对比，同时明确部分覆盖及 `limited` 就绪度。
 
 ## Import-level facts / 导入级事实
 
-Import quality compares one run with stored runs sharing `source`, `source_type`, and `reporting_window`. It reports no readiness state or metric judgment. The same exact date bounds can belong to different GSC properties or filter scopes because ownership/filter provenance is not stored; these observations describe matching or overlapping dates across stored runs, not proven revisions of one site's complete report.
-导入质量将一个导入与具有相同 `source`、`source_type` 及 `reporting_window` 的已存储导入比较。不报告就绪度状态或指标判断。由于未存储归属及筛选来源追踪，相同准确日期范围可能属于不同 GSC 属性或筛选范围；这些观察描述已存储导入之间匹配或重叠的日期，不证明同一站点完整报告的修订。
+Import quality loads runs sharing `source`, `source_type`, and `reporting_window` for context and counts. Revision, overlap, and chronology checks narrow related runs to the target's canonical scope identity and different file hashes. Explicit scope conflicts in the broader context are reported separately. The response has no page-readiness state or metric judgment. Equal unknown canonical identities preserve legacy descriptive facts without proving property/filter equality.
+导入质量读取具有相同 `source`、`source_type` 及 `reporting_window` 的导入，作为上下文与计数。修订、重叠及时间顺序检查将相关记录限定为目标规范范围身份相同且文件哈希不同的导入。更广上下文中的明确范围冲突单独报告。响应没有页面就绪度状态或指标判断。相等未知规范身份保留旧描述性事实，但不证明属性与筛选相同。
 
 | Code / 代码 | Severity / 严重程度 | Target-run condition / 目标导入条件 |
 | --- | --- | --- |
+| `unknown_report_scope` | `warning` | The target lacks sufficient property/search/full-filter evidence.<br>目标缺少充分属性、搜索或完整筛选证据。 |
+| `incompatible_report_scope` | `warning` | Other runs in the source/type/window context explicitly conflict with the target; evidence identifies dimensions and related runs.<br>来源、类型及窗口上下文中，其他导入与目标明确冲突；证据标识维度与相关导入。 |
+| `incomplete_date_coverage` | `warning` | The target's reliable observed coverage is partial.<br>目标可靠已观察覆盖为部分。 |
+| `unknown_date_coverage` | `warning` | The target has no reliable observed coverage.<br>目标没有可靠已观察覆盖。 |
 | `unknown_reporting_dates` | `warning` | The target run lacks exact period dates.<br>目标导入缺少准确时间段日期。 |
-| `same_period_revisions` | `info` | Other files have the same exact date bounds within the source/type/window context.<br>在来源、类型、窗口上下文内，其他文件具有相同准确日期范围。 |
-| `overlapping_reporting_periods` | `warning` | Other distinct known date ranges overlap inclusively. Matching same-period files are excluded from this overlap count.<br>其他不同的已知日期范围存在包含起止日的重叠。日期范围相同的文件从此重叠计数中排除。 |
-| `out_of_order_import` | `warning` | The target has an older period end than another run imported strictly earlier.<br>目标时间段结束日期早于另一个严格更早导入的记录。 |
+| `same_period_revisions` | `info` | Other different-hash runs with the same canonical scope have the same exact date bounds.<br>其他不同哈希且规范范围相同的导入具有相同准确日期范围。 |
+| `overlapping_reporting_periods` | `warning` | Other different-hash runs with the same canonical scope have distinct known ranges that overlap inclusively. Same-period revisions are excluded.<br>其他不同哈希且规范范围相同的导入具有不同已知日期范围，存在包含起止日的重叠。同时间段修订排除在外。 |
+| `out_of_order_import` | `warning` | The target's end is older than another strictly earlier-imported, different-hash run in the same canonical scope.<br>目标结束日期早于同规范范围中另一个严格更早导入且哈希不同的记录。 |
 
-Import evidence includes the target record and relevant related run IDs, dates, source/window, and import timestamps. Related revision/overlap/chronology records must have hashes different from the target. Unknown target dates cannot establish revisions, overlap, or chronology. Identical-file retries create no extra run and therefore no new revision observation. A file's changed bytes can create a separate run under the Phase 3 contract.
-导入证据包含目标记录及相关导入 ID、日期、来源与窗口及导入时间戳。相关修订、重叠及时间顺序记录的哈希必须与目标不同。未知目标日期不能确定修订、重叠或时间顺序。相同文件重试不创建额外导入，因此不产生新修订观察。文件字节变化可按第三阶段契约创建独立导入。
+Import evidence includes the target record and relevant run IDs, dates, source/window, import times, resolved scope, and coverage. Unknown target dates cannot establish revisions, overlap, or chronology. Same-file/same-scope retries create no extra run or revision. The same bytes under another scope can create a separate run and scope-conflict evidence, but do not count as a same-scope revision.
+导入证据包含目标记录及相关导入 ID、日期、来源与窗口、导入时间、解析范围及覆盖。未知目标日期不能确定修订、重叠或时间顺序。同文件与同范围重试不创建额外导入或修订。相同字节配合另一范围可创建独立导入及范围冲突证据，但不计为同范围修订。
 
 ## API contracts and counts / API 契约与计数
 
@@ -91,9 +99,9 @@ Use IDs from the existing page/import history APIs. A page response contains `pa
 | `exact_date_snapshots` | Snapshots with both period endpoints.<br>具有两个时间段起止日期的快照。 |
 | `unknown_date_snapshots` | Snapshots lacking exact endpoints.<br>缺少准确起止日期的快照。 |
 | `snapshots_with_missing_metrics` | Snapshots with at least one missing metric, counted once each.<br>至少缺失一个指标的快照，各计一次。 |
-| `distinct_exact_periods` | Distinct page/source/type/window/start/end groups.<br>不同的页面、来源、类型、窗口、起止日期组。 |
-| `revision_periods` | Exact-period groups with more than one distinct import ID.<br>具有多个不同导入 ID 的准确时间段组。 |
-| `compatible_exact_periods` | Largest number of distinct periods in a page/source/type/window/equal-duration group; not a count of compared pairs.<br>页面、来源、类型、窗口、相同时长组中最多的不同时间段数量；不是对比对数量。 |
+| `distinct_exact_periods` | Distinct page/source/type/window/canonical-scope/start/end groups.<br>不同的页面、来源、类型、窗口、规范范围及起止日期组。 |
+| `revision_periods` | Exact-period/canonical-scope groups with more than one distinct import ID.<br>具有多个不同导入 ID 的准确时间段与规范范围组。 |
+| `compatible_exact_periods` | Largest number of distinct periods in a page/source/type/window/canonical-scope/equal-duration group; not a pair count or proof that unknown scope is compatible.<br>页面、来源、类型、窗口、规范范围及相同时长组中最多的不同时间段数量；不是对比对数量，也不证明未知范围兼容。 |
 
 An import response contains `import_run_id`, `observations`, and `counts`, without page readiness. Its matching context includes the target run. Counts are `total_imports`, `exact_date_imports`, `unknown_date_imports`, `same_period_revision_imports` (other files with target bounds), `overlapping_imports` (other distinct ranges), and `earlier_imported_newer_periods` (strictly earlier imports with later ends).
 导入响应包含 `import_run_id`、`observations` 与 `counts`，不包含页面就绪度。其匹配上下文包含目标导入。计数为 `total_imports`、`exact_date_imports`、`unknown_date_imports`、`same_period_revision_imports`（具有目标日期范围的其他文件）、`overlapping_imports`（其他不同范围）及 `earlier_imported_newer_periods`（严格更早导入且结束日期更晚的记录）。
@@ -109,8 +117,8 @@ Phase 4 could not prove `current_state_not_single_snapshot` without per-field so
 Earlier imports may lack snapshots or provenance. Matching values and replaying history cannot establish missing sources. Direct SQL can bypass the controlled writer, and equal-value manual edits can remain undetectable. Legacy provenance remains unknown without backfill.
 较早导入可能缺少快照或来源。值匹配及重放历史不能建立缺失来源。直接 SQL 可绕过受控写入器，相同值手动编辑可能仍无法检测。旧来源保持未知，不回填。
 
-Observations cover only stored evidence, not unknown source rows, export coverage, authentication, property ownership, report filters, or unobserved changes. Quality uses full history in memory and may aggregate substantial evidence without paging individual observations; it is intended for development-scale data. Existing upload/resource limits remain unchanged. Observations are recomputed, without an audit log or persisted analysis version. Tests use synthetic fixtures; private exports remain outside Git.
-观察仅覆盖已存储证据，不覆盖未知来源行、导出覆盖、身份认证、属性归属、报告筛选或未观察变化。质量在内存中使用完整历史，可能汇总大量证据，不单独分页观察；适用于开发规模数据。已有上传与资源限制保持不变。观察重新计算，没有审计日志或持久化分析版本。测试使用合成数据；私人导出保留在 Git 之外。
+Phase 6 reports only supported workbook evidence and explicit user declarations. Missing property/filter evidence and legacy observed coverage stay unknown; migration never reconstructs daily dates from endpoints. Formula scope cells produce `formula_scope_metadata` uncertainty, and workbook filter rows alone never prove a complete ledger. No authenticated ownership, complete page-table export, source accuracy, or unobserved change is certified. Quality uses full history in memory and may aggregate substantial evidence without paging observations; it is intended for development-scale data. Existing upload/resource limits remain unchanged. Observations are recomputed without an audit log or persisted analysis version. Synthetic fixtures cover scope, coverage, legacy readiness, and read-only behavior; private exports remain outside Git.
+第六阶段仅报告受支持工作簿证据与明确用户声明。缺失属性或筛选证据及旧已观察覆盖保持未知；迁移绝不从起止值重建每日日期。范围公式单元格产生 `formula_scope_metadata` 不确定性，单凭工作簿筛选行绝不证明完整清单。不证明已认证归属、完整页面表导出、来源准确性或未观察变化。质量在内存中使用完整历史，可能汇总大量证据，不单独分页观察；适用于开发规模数据。已有上传与资源限制保持不变。观察重新计算，没有审计日志或持久化分析版本。合成数据覆盖范围、覆盖、旧就绪度与只读行为；私人导出保留在 Git 之外。
 
-Phase 5 includes no SEO opportunity generation, scores, prioritization, actions, Decision Engine, AI, integrations, scheduling, autonomous execution, or production deployment. Phase 6 has not started.
-第五阶段不包含 SEO 机会生成、评分、优先级、行动、决策引擎、AI、集成、调度、自主执行或生产部署。第六阶段尚未开始。
+Phase 6 includes no SEO opportunity generation, scores, prioritization, actions, Decision Engine, AI, integrations, scheduling, autonomous execution, or production deployment. Phase 7 has not started.
+第六阶段不包含 SEO 机会生成、评分、优先级、行动、决策引擎、AI、集成、调度、自主执行或生产部署。第七阶段尚未开始。

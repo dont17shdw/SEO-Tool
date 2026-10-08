@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { HistoryControls, HistoryPagination } from "@/components/history-pagination";
+import { ReportScopeSummary } from "@/components/report-scope-summary";
 import { formatImportTime, formatPeriod, listImportHistory } from "@/lib/history-api";
+import { formatCoverage } from "@/lib/report-scope";
 import { usePaginatedResource } from "@/lib/use-paginated-resource";
 
 /**
@@ -27,6 +29,7 @@ export function ImportHistory() {
                 <thead><tr>
                   <th scope="col">Imported / 导入时间</th><th scope="col">File / 文件</th>
                   <th scope="col">Source / 数据源</th><th scope="col">Report period / 报告时间段</th>
+                  <th scope="col">Report scope and coverage / 报告范围与覆盖</th>
                   <th scope="col">Rows / 行数</th><th scope="col">Created / 新建</th><th scope="col">Updated / 更新</th><th scope="col">Skipped / 跳过</th><th scope="col">Status / 状态</th>
                 </tr></thead>
                 <tbody>{data.items.map((run) => (
@@ -35,6 +38,13 @@ export function ImportHistory() {
                     <td className="url-cell">{run.filename}<br /><small>Import ID / 导入 ID：{run.id}</small></td>
                     <td>GSC · Pages / 网页</td>
                     <td>Latest 28 days / 最近 28 天<br />{formatPeriod(run)}</td>
+                    <td className="url-cell">
+                      <p>{run.report_scope.property_id ?? "Unknown property / 属性未知"}<br />{formatCoverage(run)}</p>
+                      <details className="quality-details"><summary>Inspect report scope / 查看报告范围</summary>
+                        <ReportScopeSummary scope={run.report_scope} coverage={run} showEvidence />
+                        <p>Site ID / 站点 ID：<code>{run.site_id ?? "Unknown / 未知"}</code></p>
+                      </details>
+                    </td>
                     <td>{run.total_rows}</td><td>{run.created_count}</td><td>{run.updated_count}</td><td>{run.skipped_count}</td>
                     <td>Completed / 已完成</td>
                   </tr>

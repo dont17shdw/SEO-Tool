@@ -55,7 +55,7 @@ def test_history_migration_preserves_existing_pages_and_opportunities():
             )
             connection.commit()
 
-            command.upgrade(config, "head")
+            command.upgrade(config, "0002_import_history")
             assert {"import_runs", "page_performance_snapshots"} <= set(
                 inspect(connection).get_table_names()
             )
@@ -67,8 +67,6 @@ def test_history_migration_preserves_existing_pages_and_opportunities():
             )
             assert connection.scalar(text("SELECT count(*) FROM import_runs")) == 0
             assert connection.scalar(text("SELECT count(*) FROM page_performance_snapshots")) == 0
-            connection.commit()
-            command.check(config)
             connection.commit()
 
             # Downgrade only empty new tables; legacy data must survive both directions.
@@ -82,8 +80,7 @@ def test_history_migration_preserves_existing_pages_and_opportunities():
                 original_opportunity
             )
             connection.commit()
-            command.upgrade(config, "head")
-            command.check(config)
+            command.upgrade(config, "0002_import_history")
     finally:
         with engine.begin() as connection:
             connection.exec_driver_sql(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')

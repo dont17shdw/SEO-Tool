@@ -104,10 +104,26 @@ def test_successful_import_exposes_four_known_sources_and_nullable_report_dates(
     assert Decimal(metric_map(payload)["ctr"]["current_value"]) == Decimal("0.015")
 
 
-def test_legacy_equal_snapshots_remain_unknown_without_changing_ready_comparison(
+def test_legacy_equal_snapshots_remain_unknown_with_visibly_uncertain_comparison(
     provenance_client, gsc_engine
 ):
-    page_id, _, _ = seed_history(gsc_engine, [{}, {}])
+    page_id, _, _ = seed_history(
+        gsc_engine,
+        [
+            {
+                "report_scope": None,
+                "coverage_status": "unknown",
+                "observed_date_count": None,
+                "dates_consecutive": None,
+            },
+            {
+                "report_scope": None,
+                "coverage_status": "unknown",
+                "observed_date_count": None,
+                "dates_consecutive": None,
+            },
+        ],
+    )
     payload = read_provenance(provenance_client, page_id)
     assert payload["unknown_provenance_count"] == 4
     assert payload["known_provenance_count"] == payload["unavailable_metric_count"] == 0
@@ -120,8 +136,12 @@ def test_legacy_equal_snapshots_remain_unknown_without_changing_ready_comparison
     assert all(item["snapshot_id"] is item["import_run_id"] is None for item in payload["metrics"])
     history = provenance_client.get(f"/api/v1/pages/{page_id}/performance").json()
     assert history["provenance"] == payload
-    assert history["quality"]["readiness"] == "ready"
-    assert history["quality"]["observations"] == []
+    assert history["comparison"]["scope_compatibility"] == "unknown"
+    assert history["quality"]["readiness"] == "limited"
+    assert history["quality"]["readiness_reasons"] == [
+        "unknown_report_scope",
+        "unknown_date_coverage",
+    ]
 
 
 def test_null_current_metrics_are_unavailable_not_unknown(provenance_client, gsc_engine):

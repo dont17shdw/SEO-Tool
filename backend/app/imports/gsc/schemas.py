@@ -7,7 +7,9 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, computed_field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
+
+from app.normalization.report_scope import ReportScope, unknown_scope
 
 
 class RowError(BaseModel):
@@ -31,6 +33,10 @@ class ImportPreview(BaseModel):
     reporting_window: Literal["latest_28_days"] = "latest_28_days"
     period_start: date | None = None
     period_end: date | None = None
+    observed_date_count: int | None = Field(default=None, ge=1)
+    dates_consecutive: bool | None = None
+    coverage_status: Literal["complete", "partial", "unknown"] = "unknown"
+    report_scope: ReportScope = Field(default_factory=unknown_scope)
     detected_sheet: str | None
     total_rows: int
     valid_rows: int
@@ -41,6 +47,7 @@ class ImportPreview(BaseModel):
     sample_rows: list[NormalizedGSCRow]
     can_apply: bool
     preview_hash: str
+    file_hash: str = Field(pattern="^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def validate_period_bounds(self) -> "ImportPreview":

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/lib/api";
+import { isDateCoverage, isReportScope, type DateCoverage, type ReportScope, type ScopeDeclaration } from "@/lib/report-scope";
 
 export type PageMetrics = {
   url: string;
@@ -8,7 +9,7 @@ export type PageMetrics = {
   average_position: string | number | null;
 };
 
-export type ImportPreview = {
+export type ImportPreview = DateCoverage & {
   source: "gsc_pages";
   reporting_window: "latest_28_days";
   period_start: string | null;
@@ -24,6 +25,8 @@ export type ImportPreview = {
   sample_rows: (PageMetrics & { row: number })[];
   can_apply: boolean;
   preview_hash: string;
+  file_hash: string;
+  report_scope: ReportScope;
 };
 
 export type ImportResult = {
@@ -109,15 +112,17 @@ export async function requestJson(path: string, options: RequestInit): Promise<u
  * Verify the preview contract before enabling an explicit import confirmation.
  * 在启用明确的导入确认前，验证预览响应是否符合接口契约。
  */
-export async function previewGscFile(file: File, signal: AbortSignal): Promise<ImportPreview> {
+export async function previewGscFile(file: File, scope: ScopeDeclaration, signal: AbortSignal): Promise<ImportPreview> {
   const body = new FormData();
   body.append("file", file);
+  body.append("scope", JSON.stringify(scope));
   const payload = await requestJson("/imports/gsc/pages/preview", { method: "POST", body, signal });
   if (
     !isRecord(payload) ||
     payload.source !== "gsc_pages" ||
     payload.reporting_window !== "latest_28_days" ||
     !isReportingPeriod(payload) ||
+    !isDateCoverage(payload) || !isReportScope(payload.report_scope) ||
     !(payload.detected_sheet === null || typeof payload.detected_sheet === "string") ||
     ![payload.total_rows, payload.valid_rows, payload.invalid_rows, payload.duplicate_rows].every(isCount) ||
     !isRecord(payload.column_mapping) ||
@@ -137,7 +142,8 @@ export async function previewGscFile(file: File, signal: AbortSignal): Promise<I
     !payload.sample_rows.every((row) => isPageMetrics(row) && isRecord(row) && isCount(row.row)) ||
     typeof payload.can_apply !== "boolean" ||
     typeof payload.preview_hash !== "string" ||
-    payload.preview_hash.length === 0
+    !/^[0-9a-f]{64}$/.test(payload.preview_hash) ||
+    typeof payload.file_hash !== "string" || !/^[0-9a-f]{64}$/.test(payload.file_hash)
   ) {
     throw new Error("Unexpected import preview response. 导入预览响应格式不符合预期。");
   }
@@ -145,18 +151,20 @@ export async function previewGscFile(file: File, signal: AbortSignal): Promise<I
 }
 
 /**
- * Resubmit the selected file and its preview fingerprint without a server-side session.
- * 重新提交所选文件及其预览指纹，无需在服务端保存会话。
+ * Resubmit the selected file, retained scope declaration, and bound preview fingerprint.
+ * 重新提交所选文件、保留的范围声明及与之绑定的预览指纹。
  */
 export async function applyGscFile(
   file: File,
   previewHash: string,
+  scope: ScopeDeclaration,
   signal: AbortSignal,
 ): Promise<ImportResult> {
   const body = new FormData();
   body.append("file", file);
   body.append("confirmed", "true");
   body.append("preview_hash", previewHash);
+  body.append("scope", JSON.stringify(scope));
   const payload = await requestJson("/imports/gsc/pages/apply", { method: "POST", body, signal });
   if (
     !isRecord(payload) ||

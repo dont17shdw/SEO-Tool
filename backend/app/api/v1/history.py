@@ -95,6 +95,10 @@ def _load_page_history(
             impressions=snapshot.impressions,
             ctr=snapshot.ctr,
             average_position=snapshot.average_position,
+            report_scope=run.report_scope,
+            coverage_status=run.coverage_status,
+            observed_date_count=run.observed_date_count,
+            dates_consecutive=run.dates_consecutive,
         )
         for snapshot, run in records
     ]
@@ -167,6 +171,29 @@ def list_imports(
 
 
 @router.get(
+    "/imports/{import_run_id}",
+    response_model=ImportRunResponse,
+    summary="Read report scope and observed coverage / 读取报告范围及已观察覆盖",
+)
+def import_details(
+    import_run_id: UUID, session: Annotated[Session, Depends(get_session)]
+) -> ImportRunResponse:
+    """Inspect one stored report without inferring missing ownership or coverage.
+    检查一个已存储报告，不推断缺失的归属或覆盖。
+    """
+    try:
+        record = session.get(ImportRun, import_run_id)
+    except SQLAlchemyError:
+        raise _database_unavailable() from None
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "import_not_found", "message": "Import not found. / 未找到导入记录。"},
+        )
+    return ImportRunResponse.model_validate(record)
+
+
+@router.get(
     "/pages/{page_id}/performance",
     response_model=PagePerformanceHistory,
     summary="Read page snapshots and compatible-period comparison / 读取页面快照与兼容周期比较",
@@ -204,6 +231,11 @@ def page_performance(
             impressions=snapshot.impressions,
             ctr=snapshot.ctr,
             average_position=snapshot.average_position,
+            site_id=import_run.site_id,
+            report_scope=import_run.report_scope,
+            observed_date_count=import_run.observed_date_count,
+            dates_consecutive=import_run.dates_consecutive,
+            coverage_status=import_run.coverage_status,
         )
         for snapshot, import_run in records[offset : offset + page_size]
     ]
@@ -298,6 +330,10 @@ def import_quality(
             period_end=run.period_end,
             imported_at=run.imported_at,
             file_hash=run.file_hash,
+            report_scope=run.report_scope,
+            observed_date_count=run.observed_date_count,
+            dates_consecutive=run.dates_consecutive,
+            coverage_status=run.coverage_status,
         )
         for run in records
     ]

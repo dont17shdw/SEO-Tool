@@ -3,7 +3,9 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, JsonValue, computed_field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, computed_field, field_validator
+
+from app.normalization.report_scope import ReportScope, unknown_scope
 
 
 class ImportResult(BaseModel):
@@ -23,6 +25,7 @@ class WebsitePageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    site_id: UUID | None = None
     url: str
     clicks_28d: int | None
     impressions_28d: int | None
@@ -50,7 +53,27 @@ class ReportingPeriod(BaseModel):
         )
 
 
-class ImportRunResponse(ReportingPeriod):
+class ReportEvidenceResponse(ReportingPeriod):
+    """Expose report-level facts without inventing evidence for legacy records.
+    展示报告级事实，不为旧记录编造证据。
+    """
+
+    site_id: UUID | None = None
+    report_scope: ReportScope = Field(default_factory=unknown_scope)
+    observed_date_count: int | None = None
+    dates_consecutive: bool | None = None
+    coverage_status: Literal["unknown", "partial", "complete"] = "unknown"
+
+    @field_validator("report_scope", mode="before")
+    @classmethod
+    def preserve_unknown_scope(cls, value):
+        """Represent absent stored scope as unknown, without writing any backfill.
+        将缺失的已存储范围表示为未知，不写入任何回填。
+        """
+        return unknown_scope() if value is None else value
+
+
+class ImportRunResponse(ReportEvidenceResponse):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -75,7 +98,7 @@ class ImportRunList(BaseModel):
     total_pages: int
 
 
-class PerformanceSnapshotResponse(ReportingPeriod):
+class PerformanceSnapshotResponse(ReportEvidenceResponse):
     id: UUID
     import_run_id: UUID
     page_id: UUID
@@ -108,6 +131,15 @@ class PerformanceComparisonResponse(BaseModel):
     current_period_start: date
     current_period_end: date
     periods_overlap: bool
+    scope_compatibility: Literal["compatible", "unknown"]
+    previous_report_scope: ReportScope
+    current_report_scope: ReportScope
+    previous_coverage_status: Literal["unknown", "partial", "complete"]
+    current_coverage_status: Literal["unknown", "partial", "complete"]
+    previous_observed_date_count: int | None
+    current_observed_date_count: int | None
+    previous_dates_consecutive: bool | None
+    current_dates_consecutive: bool | None
     clicks: MetricChangeResponse
     impressions: MetricChangeResponse
     ctr_percentage_point_change: Decimal | None

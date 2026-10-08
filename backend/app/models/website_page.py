@@ -10,6 +10,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Integer,
     Numeric,
     String,
@@ -37,7 +38,9 @@ class WebsitePage(Base):
 
     __tablename__ = "website_pages"
     __table_args__ = (
-        UniqueConstraint("url"),
+        # Unknown ownership remains a distinct namespace with unique URLs of its own.
+        # 未知归属保持独立命名空间，其中的 URL 也必须唯一。
+        UniqueConstraint("site_id", "url", postgresql_nulls_not_distinct=True),
         *(
             CheckConstraint(f"{column} >= 0", name=f"{column}_nonnegative")
             for column in (
@@ -59,6 +62,9 @@ class WebsitePage(Base):
     )
 
     id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4)
+    site_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("sites.id", ondelete="RESTRICT"), index=True
+    )
     url: Mapped[str] = mapped_column(Text, nullable=False)
     page_type: Mapped[str | None] = mapped_column(String(50))
     title: Mapped[str | None] = mapped_column(Text)

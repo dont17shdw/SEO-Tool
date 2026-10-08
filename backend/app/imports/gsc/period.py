@@ -3,8 +3,9 @@
 """
 
 import re
+from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from app.imports.gsc.mapping import normalize_label
 from app.normalization.gsc import is_blank
@@ -18,6 +19,19 @@ class PeriodWorksheetTooLarge(ValueError):
     """Signal metadata size limits without coupling date extraction to HTTP errors.
     表示元数据超过大小限制，避免将日期提取与 HTTP 错误耦合。
     """
+
+
+@dataclass(frozen=True)
+class ReportingEvidence:
+    """Retain trustworthy endpoints and distinct observed daily coverage together.
+    一起保留可信起止日期与不同的已观察每日覆盖信息。
+    """
+
+    period_start: date | None = None
+    period_end: date | None = None
+    observed_date_count: int | None = None
+    dates_consecutive: bool | None = None
+    coverage_status: Literal["complete", "partial", "unknown"] = "unknown"
 
 
 def _reporting_date(value: Any) -> date | None:
@@ -73,12 +87,12 @@ def _worksheet_dates(sheet: Any, max_rows: int) -> tuple[set[date], bool]:
     return dates, invalid
 
 
-def extract_reporting_period(workbook: Any, max_rows: int) -> tuple[date | None, date | None]:
-    """Use matching date sets to establish observed bounds; uncertain evidence stays unknown.
-    使用一致的日期集合确定观察范围；不确定的证据保持未知。
+def extract_reporting_evidence(workbook: Any, max_rows: int) -> ReportingEvidence:
+    """Use matching distinct date sets to establish bounds and expected 28-day coverage.
+    使用一致的不同日期集合确定范围与预期的 28 天覆盖。
 
-    Duplicate and unsorted days are valid; no missing days or 28-day coverage are invented.
-    允许重复或未排序的日期；不补造缺失日期，也不假定覆盖完整的 28 天。
+    Only 28 distinct consecutive days establish complete observed coverage; endpoints alone do not.
+    仅 28 个不同的连续日期能证明完整的已观察覆盖；单凭起止日期不能证明。
     """
     evidence: set[date] | None = None
     uncertain = False
@@ -93,5 +107,22 @@ def extract_reporting_period(workbook: Any, max_rows: int) -> tuple[date | None,
             else:
                 evidence = dates
     if uncertain or not evidence:
-        return None, None
-    return min(evidence), max(evidence)
+        return ReportingEvidence()
+    start, end = min(evidence), max(evidence)
+    count = len(evidence)
+    consecutive = count == (end - start).days + 1
+    return ReportingEvidence(
+        period_start=start,
+        period_end=end,
+        observed_date_count=count,
+        dates_consecutive=consecutive,
+        coverage_status="complete" if count == 28 and consecutive else "partial",
+    )
+
+
+def extract_reporting_period(workbook: Any, max_rows: int) -> tuple[date | None, date | None]:
+    """Preserve the legacy endpoint helper while sharing the coverage extraction.
+    保留旧起止日期辅助函数，同时复用覆盖提取。
+    """
+    evidence = extract_reporting_evidence(workbook, max_rows)
+    return evidence.period_start, evidence.period_end
