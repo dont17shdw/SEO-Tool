@@ -14,7 +14,7 @@ from app.analysis.data_quality import (
     analyse_import_quality,
     analyse_page_quality,
 )
-from app.analysis.opportunity_engine import analyse_page_opportunities
+from app.analysis.opportunity_engine import PageOpportunityAnalysis, analyse_page_opportunities
 from app.analysis.performance_comparison import (
     ComparisonOutcome,
     PerformanceObservation,
@@ -198,20 +198,25 @@ def _load_grouped_page_histories(
     ]
 
 
-def _page_opportunities(loaded: LoadedPageHistory) -> PageOpportunityAnalysisResponse:
+def _page_opportunity_analysis(loaded: LoadedPageHistory) -> PageOpportunityAnalysis:
     """Reuse the exact selected comparison and quality facts without another database read.
     复用完全相同的所选比较与质量事实，不增加数据库读取。
     """
-    return PageOpportunityAnalysisResponse.model_validate(
-        analyse_page_opportunities(
-            page_id=loaded.page.id,
-            site_id=loaded.page.site_id,
-            url=loaded.page.url,
-            observations=loaded.observations,
-            outcome=loaded.comparison,
-            quality=loaded.analysed_quality,
-        )
+    return analyse_page_opportunities(
+        page_id=loaded.page.id,
+        site_id=loaded.page.site_id,
+        url=loaded.page.url,
+        observations=loaded.observations,
+        outcome=loaded.comparison,
+        quality=loaded.analysed_quality,
     )
+
+
+def _page_opportunities(loaded: LoadedPageHistory) -> PageOpportunityAnalysisResponse:
+    """Preserve the neutral Phase 7 response while sharing its raw runtime analysis.
+    在共享原始运行时分析的同时保留中立的第七阶段响应。
+    """
+    return PageOpportunityAnalysisResponse.model_validate(_page_opportunity_analysis(loaded))
 
 
 @router.get(

@@ -277,6 +277,45 @@ class OpportunityCandidateList(BaseModel):
     total_pages: int
 
 
+class PrioritizedOpportunityCandidateResponse(OpportunityCandidateResponse):
+    """Retain the original signal and add auditable attention tiers, without actions or scores.
+    保留原始信号并增加可审阅的关注级别，不包含行动或评分。
+    """
+
+    priority_tier: Literal["high", "medium", "low"]
+    priority_rule_version: str
+    priority_reason_code: str
+    priority_message: str
+    priority_inputs: dict[str, int | Decimal | str]
+    priority_thresholds: dict[str, dict[str, int | Decimal]]
+
+
+class OpportunityEligibilitySummary(BaseModel):
+    """Count analyzed pages before candidate-tier filtering or pagination.
+    在候选级别筛选及分页之前统计已分析页面。
+
+    Reason counts overlap and only concern ineligible pages, not healthy-site judgments.
+    原因计数可重叠，仅涉及不合格页面，不作为站点健康判断。
+    """
+
+    analyzed_pages: int
+    eligible_pages: int
+    ineligible_pages: int
+    pages_with_candidates: int
+    ready_pages_without_candidates: int
+    detected_candidates: int
+    gate_reason_counts: dict[str, int]
+
+
+class PrioritizedOpportunityCandidateList(BaseModel):
+    items: list[PrioritizedOpportunityCandidateResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+    summary: OpportunityEligibilitySummary
+
+
 class PagePerformanceHistory(BaseModel):
     current_page: WebsitePageResponse
     items: list[PerformanceSnapshotResponse]

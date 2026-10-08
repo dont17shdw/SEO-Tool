@@ -1,12 +1,12 @@
-import { OpportunitiesList } from "@/components/opportunities-list";
+import { OpportunitiesWorkspace } from "@/components/opportunities-workspace";
 
 export default function OpportunitiesPage() {
   return <main className="wide">
     <header>
-      <p className="eyebrow">Phase 7 · Read-only signals / 第七阶段 · 只读信号</p>
-      <h1>SEO opportunity candidates / SEO 机会候选</h1>
-      <p className="intro">Factual signals from trusted historical GSC comparisons. Candidates are computed when requested. 基于可信历史 GSC 对比的事实信号。候选在请求时计算。</p>
+      <p className="eyebrow">Phase 8 · Read-only analysis / 第八阶段 · 只读分析</p>
+      <h1>SEO opportunities / SEO 机会</h1>
+      <p className="intro">Historical GSC evidence → Factual signals → Transparent attention tiers. Candidates and priorities are computed when requested. 历史 GSC 证据 → 事实信号 → 透明关注等级。候选与优先级在请求时计算。</p>
     </header>
-    <OpportunitiesList />
+    <OpportunitiesWorkspace />
   </main>;
 }

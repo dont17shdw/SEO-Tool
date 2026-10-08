@@ -5,8 +5,8 @@
 Phase 7 detects four factual SEO signals from an existing selected historical comparison: `traffic_decline`, `ctr_opportunity`, `ranking_decline`, and `impression_growth_gap`. A candidate states which observed change met a transparent heuristic rule and retains its source records and thresholds. It does not explain the cause of that change or decide what should happen next.
 第七阶段根据已有所选历史对比检测四种事实 SEO 信号：`traffic_decline`、`ctr_opportunity`、`ranking_decline` 及 `impression_growth_gap`。候选说明哪项已观察变化满足透明启发式规则，并保留来源记录及阈值。不解释变化原因，也不决定下一步应该采取什么行动。
 
-Keep the stages distinct: data quality asks whether evidence supports comparison; opportunity detection identifies a factual signal; prioritization asks which signal matters most; decisions define an action. Only the first two are implemented. There are no scores, priorities, severity rankings, business-value weights, confidence scores, recommended actions, AI calls, or external integrations in the engine.
-各阶段保持独立：数据质量判断证据能否支持对比；机会检测识别事实信号；优先级判断哪项信号最重要；决策定义行动。仅前两者已实现。引擎没有评分、优先级、严重程度排序、业务价值权重、置信度评分、建议行动、AI 调用或外部集成。
+Keep the stages distinct: data quality asks whether evidence supports comparison; opportunity detection identifies a factual signal; prioritization assigns attention to that signal; decisions define an action. Phase 8 implements prioritization in a [separate module and endpoint](opportunity-prioritization.md), without changing this detection contract. There are no scores, priorities, severity rankings, business-value weights, confidence scores, recommended actions, AI calls, or external integrations in the detection engine itself.
+各阶段保持独立：数据质量判断证据能否支持对比；机会检测识别事实信号；优先级为该信号分配关注程度；决策定义行动。第八阶段在[独立模块及接口](opportunity-prioritization.md) 中实现优先级，不改变此检测契约。检测引擎本身没有评分、优先级、严重程度排序、业务价值权重、置信度评分、建议行动、AI 调用或外部集成。
 
 `backend/app/analysis/opportunity_engine.py` contains frozen database-independent dataclasses and deterministic rule logic. It consumes `compare_performance(...)` and `analyse_page_quality(...)` results, including Phase 6 scope and coverage evidence. It does not read the database, select another comparison, rebuild data quality, fill missing values, or write any record.
 `backend/app/analysis/opportunity_engine.py` 包含不可变且独立于数据库的数据类与确定性规则逻辑。它使用 `compare_performance(...)` 与 `analyse_page_quality(...)` 结果，包括第六阶段范围及覆盖证据。不读取数据库、不另选对比、不重建数据质量、不填补缺失值，也不写入任何记录。
@@ -80,8 +80,8 @@ These synthetic examples assume the mandatory evidence gate passes. Other rules 
 The CTR rule describes deterioration in click-through efficiency while visibility remains broadly comparable. It does not prove a bad title/meta description or recommend editing either. The growth-gap rule describes visibility growing faster than clicks, without choosing a remedy. Traffic and ranking rules describe changes without inferring their causes.
 CTR 规则描述在可见性大致可比时点击效率恶化。不证明标题或元描述不好，也不建议编辑。增长缺口规则描述可见性增长快于点击数，不选择解决方案。流量及排名规则描述变化，不推断原因。
 
-A page can legitimately emit several types: for example, falling clicks and worsening average position can generate both `traffic_decline` and `ranking_decline`. No rule suppresses another. Each type appears at most once for page + selected previous/current snapshots within one runtime analysis. Relative importance belongs to a separately defined later prioritization stage.
-页面可合理生成多个类型：例如点击数下降及平均排名变差可同时生成 `traffic_decline` 与 `ranking_decline`。规则互不压制。在一次运行时分析中，每个页面及所选此前、当前快照对的每种类型最多出现一次。相对重要性属于另行定义的后续优先级阶段。
+A page can legitimately emit several types: for example, falling clicks and worsening average position can generate both `traffic_decline` and `ranking_decline`. No rule suppresses another. Each type appears at most once for page + selected previous/current snapshots within one runtime analysis. Phase 8 evaluates every retained candidate independently in its separate prioritization stage, without a combined impact score.
+页面可合理生成多个类型：例如点击数下降及平均排名变差可同时生成 `traffic_decline` 与 `ranking_decline`。规则互不压制。在一次运行时分析中，每个页面及所选此前、当前快照对的每种类型最多出现一次。第八阶段在独立优先级阶段中分别评估每个保留候选，不使用综合影响评分。
 
 ## Candidate and page-response contract / 候选与页面响应契约
 
@@ -120,8 +120,8 @@ curl 'http://localhost:8000/api/v1/opportunities?page=1&page_size=50'
 curl http://localhost:8000/api/v1/pages/PAGE_UUID/opportunities
 ```
 
-The `/opportunities` development view shows bilingual signal labels, page URLs, selected periods, and factual evidence. `/pages/[id]` shows page signals or existing evidence-gate reasons. There are no priority badges, scores, recommended actions, or execution buttons. The page view reuses the performance response rather than fetching another opportunity/provenance view independently.
-`/opportunities` 开发视图显示双语信号标签、页面 URL、所选时间段及事实证据。`/pages/[id]` 显示页面信号或已有证据门槛原因。没有优先级徽章、评分、建议行动或执行按钮。页面视图复用性能响应，不另行获取独立机会或来源视图。
+The original neutral `/opportunities` view shows bilingual signal labels, page URLs, selected periods, and factual evidence without priority metadata. Phase 8 adds a clearly separate prioritized workspace view. `/pages/[id]` retains factual page signals or existing evidence-gate reasons and reuses the performance response rather than fetching another opportunity/provenance view independently. Neither view adds scores, recommended actions, or execution buttons.
+原 `/opportunities` 中立视图显示双语信号标签、页面 URL、所选时间段及事实证据，不包含优先级元数据。第八阶段增加明确独立的优先级工作区视图。`/pages/[id]` 保留事实页面信号或已有证据门槛原因，复用性能响应，不另行获取独立机会或来源视图。两个视图均不增加评分、建议行动或执行按钮。
 
 ## Candidate pagination and scale / 候选分页与规模
 
@@ -156,7 +156,7 @@ Synthetic gate and exact-boundary tests cover low volumes, zero baselines, Decim
 Ready evidence and met thresholds do not certify source accuracy, authenticated property ownership, complete page exports, statistical significance, causation, expected impact, or appropriate action. Aggregate page metrics do not provide query-level intent, expected CTR curves, SERP context, competitor behavior, seasonality controls, or enough evidence to diagnose a title/meta issue. Unsupported or legacy unknown scope/coverage stays unknown; it is not backfilled to unlock candidates. Direct SQL may bypass controlled writers, and this is not a tamper-proof audit system.
 就绪证据及满足阈值不证明来源准确性、已认证属性归属、完整页面导出、统计显著性、因果关系、预期影响或合适行动。汇总页面指标不提供查询级意图、预期 CTR 曲线、搜索结果背景、竞争对手行为、季节性控制，或足以诊断标题、元描述问题的证据。不支持或旧未知范围与覆盖保持未知，不回填以解锁候选。直接 SQL 可绕过受控写入器；本系统不是防篡改审计系统。
 
-## Phase 8 boundary / 第八阶段边界
+## Relationship to Phase 8 / 与第八阶段的关系
 
-Recommended next scope: validate and calibrate these four documented rules against authorized real-site evidence, then separately specify transparent prioritization inputs and ordering. Decide explicitly whether candidates stay runtime-only or require a versioned persisted lifecycle. Keep detection, prioritization, and any later recommendation policy distinct. No Phase 8 work is implemented; recommendations, Decision Engine logic, AI, query/SERP analysis, integrations, scheduling, and execution require their own authorization and design.
-建议下一阶段范围：根据已授权真实站点证据验证与校准四种已记录规则，再另行定义透明优先级输入与排序。明确决定候选继续保持运行时形式，还是需要带版本的持久化生命周期。检测、优先级及任何后续建议策略保持独立。未实现第八阶段工作；建议、决策引擎逻辑、AI、查询与搜索结果分析、集成、调度及执行均需要独立授权与设计。
+Phase 8 adds narrowly validated custom 28-day XLSX windows and transparent `priority-v1` attention tiers to these same runtime candidates. It preserves every detection threshold, gate, original evidence field, neutral ordering, and read-only storage boundary. No persistence or migration is added. **Real-site calibration has not yet been performed.** See [opportunity-prioritization.md](opportunity-prioritization.md) for exact tier rules, API contracts, limitations, and the private TuffPlus acceptance procedure. The next milestone is MVP real-data acceptance and deployment, reviewed separately; recommendations, Decision Engine logic, AI, integrations, and execution remain unimplemented.
+第八阶段为这些相同运行时候选增加严格校验的自定义 28 天 XLSX 窗口及透明 `priority-v1` 关注层级。保留全部检测阈值、门槛、原证据字段、中立排序及只读存储边界。不增加持久化或迁移。**尚未进行真实站点校准。** 准确层级规则、API 契约、限制及私下 TuffPlus 验收流程详见 [opportunity-prioritization.md](opportunity-prioritization.md)。下一里程碑为另行评审的 MVP 真实数据验收与部署；建议、决策引擎逻辑、AI、集成及执行仍未实现。
