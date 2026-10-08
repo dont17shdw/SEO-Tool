@@ -5,28 +5,27 @@ export default function Home() {
   return (
     <main>
       <header>
-        <p className="eyebrow">Phase 8 · Analysis workspace / 第八阶段 · 分析工作区</p>
-        <h1>SEO Tool</h1>
+        <p className="eyebrow">概览</p>
+        <h1>SEO 分析工具</h1>
         <p className="intro">
-          Import Google Search Console data, inspect comparison evidence, and view factual opportunity signals with transparent attention tiers.
-          <span lang="zh"> 导入 Google Search Console 数据，检查对比证据，并查看具有透明关注等级的事实机会信号。</span>
+          导入 GSC 数据，查看页面的历史表现与周期对比，并根据透明的规则了解 SEO 机会及其优先级。
         </p>
       </header>
 
       <section className="card" aria-labelledby="frontend-heading">
-        <div className="status-label">Running / 运行中</div>
-        <h2 id="frontend-heading">Frontend is running / 前端已启动</h2>
-        <p>Next.js, React, and TypeScript are ready. 开发基础已就绪。</p>
+        <div className="status-label">运行中</div>
+        <h2 id="frontend-heading">前端已启动</h2>
+        <p>页面已正常加载，可以检查后端连接并开始导入报告。</p>
       </section>
 
       <BackendHealth />
       <section className="card" aria-labelledby="data-heading">
-        <h2 id="data-heading">GSC data workflow / GSC 数据流程</h2>
-        <p>Preview a latest-28-day or supported custom 28-day Pages export, confirm import, then inspect stored metrics and historical evidence. 预览最近 28 天或受支持的自定义 28 天网页导出文件，确认导入后检查已保存指标与历史证据。</p>
-        <p><Link href="/imports/gsc">Import GSC pages / 导入 GSC 网页 →</Link></p>
-        <p><Link href="/pages">View stored pages / 查看已保存页面 →</Link></p>
-        <p><Link href="/imports/history">View import history / 查看导入历史 →</Link></p>
-        <p><Link href="/opportunities">View priorities and original signals / 查看优先级与原始信号 →</Link></p>
+        <h2 id="data-heading">GSC 数据流程</h2>
+        <p>预览最近 28 天或受支持的自定义 28 天网页表现报告，确认导入后查看已保存的页面指标、历史分析依据与 SEO 机会。</p>
+        <p><Link href="/imports/gsc">导入 GSC 数据 →</Link></p>
+        <p><Link href="/pages">查看网站页面 →</Link></p>
+        <p><Link href="/imports/history">查看导入历史 →</Link></p>
+        <p><Link href="/opportunities">查看 SEO 机会优先级与原始信号 →</Link></p>
       </section>
     </main>
   );

@@ -9,6 +9,11 @@ Long-term workflow: `DATA → ANALYZE → DECIDE → ACT → MEASURE → LEARN`.
 V1 scope: `DATA → ANALYZE → PRIORITIZE → RECOMMEND`.
 V1 范围：`DATA → ANALYZE → PRIORITIZE → RECOMMEND`。
 
+## MVP interface language / MVP 界面语言
+
+The MVP interface uses Simplified Chinese (`zh-CN`) throughout imports, history, evidence, opportunities, priority tiers, and feedback. A small frontend presentation layer translates stable codes and structured evidence while retaining the Phase 1–8 API contracts, metrics, and analysis rules. Technical documentation and important code comments remain bilingual, English first and Chinese second. See [localization.md](docs/localization.md) for presentation boundaries, intentional technical terms, and validation scope.
+MVP 界面在导入、历史、分析依据、SEO 机会、优先级及操作反馈中统一使用简体中文（`zh-CN`）。轻量前端展示层根据稳定代码与结构化证据生成中文内容，同时保留第一至八阶段的 API 契约、指标及分析规则。技术文档及重要代码注释仍使用英文在前、中文在后的双语形式。展示边界、保留的技术术语及验证范围详见 [localization.md](docs/localization.md)。
+
 ## Requirements / 环境要求
 
 - Node.js 22.13+ on the 22.x line, or Node.js 24+, and npm for the frontend.
@@ -179,6 +184,7 @@ docs/current-provenance.md  Per-field current sources and limits / 逐字段当�
 docs/report-scope.md   Property/search/filter evidence and date coverage / 属性、搜索、筛选证据及日期覆盖
 docs/opportunity-engine.md  Runtime signals, evidence gate, exact v1 rules / 运行时信号、证据门槛、准确 V1 规则
 docs/opportunity-prioritization.md  Attention tiers and real-data acceptance / 关注层级与真实数据验收
+docs/localization.md   Simplified Chinese UI presentation boundaries / 简体中文界面展示边界
 compose.yaml          Local PostgreSQL service only / 仅本地 PostgreSQL 服务
 ```
 
@@ -188,8 +194,8 @@ Imports and normalization implement the GSC file workflow. Separate deterministi
 Read [architecture](docs/architecture.md), [data model](docs/data-model.md), [GSC import](docs/gsc-import.md), [performance history](docs/performance-history.md), [data quality](docs/data-quality.md), [current provenance](docs/current-provenance.md), [report scope](docs/report-scope.md), [opportunity engine](docs/opportunity-engine.md), [prioritization](docs/opportunity-prioritization.md), and [agent instructions](AGENTS.md) before extending the application. Important documentation and non-trivial code comments/docstrings use English first, Chinese second.
 扩展应用之前，请阅读[架构文档](docs/architecture.md)、[数据模型文档](docs/data-model.md)、[GSC 导入文档](docs/gsc-import.md)、[性能历史文档](docs/performance-history.md)、[数据质量文档](docs/data-quality.md)、[当前来源文档](docs/current-provenance.md)、[报告范围文档](docs/report-scope.md)、[机会引擎文档](docs/opportunity-engine.md)、[优先级文档](docs/opportunity-prioritization.md)和[代理开发指南](AGENTS.md)。重要文档及非简单代码注释、文档字符串使用英文在前、中文在后的双语形式。
 
-The next milestone is **MVP real-data acceptance and deployment**, scoped and reviewed separately. Phase 8 does not automatically start Phase 9 or authorize deployment or additional features.
-下一里程碑是另行定义范围并评审的 **MVP 真实数据验收与部署**。第八阶段不会自动启动第九阶段，也不授权部署或增加功能。
+The next milestone is **an MVP local trial using real TuffPlus GSC exports**, scoped and authorized separately. Neither Phase 8 nor the localization task starts Phase 9 or authorizes deployment or additional features. Real-site calibration has not been performed.
+下一里程碑是另行定义范围并授权的 **使用真实 TuffPlus GSC 导出进行 MVP 本地试用**。第八阶段及本次本地化任务均不会启动第九阶段，也不授权部署或增加功能。尚未进行真实站点校准。
 
 To stop the local database while retaining its data, run `docker compose down` from the repository root.
 如需停止本地数据库并保留数据，请从仓库根目录运行 `docker compose down`。

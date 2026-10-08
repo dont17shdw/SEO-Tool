@@ -42,10 +42,10 @@ export function PagesList() {
 
   return (
     <section className="card" aria-labelledby="pages-heading">
-      <h2 id="pages-heading">Stored pages / 已保存页面</h2>
-      <p>Latest stored metrics, shown without analysis or recommendations. Unknown values appear as —. 显示最新已保存指标，不进行分析或建议。未知值显示为 —。</p>
+      <h2 id="pages-heading">页面指标</h2>
+      <p>显示各页面最新保存的指标；此列表不生成分析结论或操作建议。未知值显示为 —。</p>
       <div className="toolbar">
-        <label htmlFor="page-size">Rows per page / 每页行数</label>
+        <label htmlFor="page-size">每页行数</label>
         <select id="page-size" value={pageSize} disabled={loading} onChange={(event) => {
           setLoading(true);
           setError(null);
@@ -60,20 +60,20 @@ export function PagesList() {
           setLoading(true);
           setError(null);
           setReload((value) => value + 1);
-        }}>Refresh / 刷新</button>
+        }}>刷新</button>
       </div>
 
-      {loading && <p role="status">Loading pages… / 正在加载页面……</p>}
+      {loading && <p role="status">正在加载网站页面……</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
       {!loading && !error && data && (
         <>
           {data.items.length > 0 ? <PageMetricsTable rows={data.items} linkToHistory /> : (
-            <p>No pages on this page. <Link href="/imports/gsc">Import a GSC report</Link>. 本页没有记录。请先导入 GSC 报告。</p>
+            <p>本页没有页面记录。请先<Link href="/imports/gsc">导入 GSC 数据</Link>。</p>
           )}
-          <div className="pagination" aria-label="Pagination / 分页">
-            <button type="button" onClick={() => changePage(page - 1)} disabled={page <= 1}>Previous / 上一页</button>
-            <p role="status">Page / 页 {data.page} of / 共 {Math.max(1, data.total_pages)} · Total / 总计 {data.total}</p>
-            <button type="button" onClick={() => changePage(page + 1)} disabled={page >= data.total_pages}>Next / 下一页</button>
+          <div className="pagination" aria-label="网站页面分页">
+            <button type="button" onClick={() => changePage(page - 1)} disabled={page <= 1}>上一页</button>
+            <p role="status">第 {data.page} 页，共 {Math.max(1, data.total_pages)} 页 · 总计 {data.total} 条</p>
+            <button type="button" onClick={() => changePage(page + 1)} disabled={page >= data.total_pages}>下一页</button>
           </div>
         </>
       )}

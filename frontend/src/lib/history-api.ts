@@ -3,6 +3,7 @@ import { isDataQuality, type DataQuality } from "@/lib/data-quality";
 import { isCurrentProvenance, type CurrentProvenance } from "@/lib/current-provenance";
 import { isDateCoverage, isReportScope, type DateCoverage, type ReportScope } from "@/lib/report-scope";
 import { isPageOpportunityAnalysis, type PageOpportunityAnalysis } from "@/lib/opportunities-api";
+import { ChineseUiError } from "@/lib/zh-cn";
 
 type ReportingPeriod = {
   reporting_window: "latest_28_days";
@@ -155,7 +156,7 @@ export async function listImportHistory(page: number, pageSize: number, signal: 
   const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   const payload = await requestJson(`/imports?${query}`, { method: "GET", signal });
   if (!isRecord(payload) || !isPagination(payload, page, pageSize) || !Array.isArray(payload.items) || !payload.items.every(isImportRun)) {
-    throw new Error("Unexpected import history response. 导入历史响应格式不符合预期。");
+    throw new ChineseUiError("导入历史响应格式异常，请刷新页面或检查后端版本。");
   }
   return payload as ImportHistoryResponse;
 }
@@ -176,7 +177,7 @@ export async function getPagePerformance(pageId: string, page: number, pageSize:
     !isPageOpportunityAnalysis(payload.opportunities,
       payload.current_page as PagePerformanceResponse["current_page"],
       payload.comparison as PerformanceComparison | null, payload.quality as DataQuality)) {
-    throw new Error("Unexpected page performance response. 页面表现响应格式不符合预期。");
+    throw new ChineseUiError("页面表现响应格式异常，暂时无法展示分析。请刷新页面或检查后端版本。");
   }
   return payload as PagePerformanceResponse;
 }
@@ -184,11 +185,15 @@ export async function getPagePerformance(pageId: string, page: number, pageSize:
 export function formatPeriod(period: { period_start: string | null; period_end: string | null }): string {
   return period.period_start && period.period_end
     ? `${period.period_start} → ${period.period_end}`
-    : "Unknown exact dates / 精确日期未知";
+    : "精确报告日期未知";
 }
 
+/**
+ * Localize timestamps in the browser's existing timezone; exact report dates stay unchanged.
+ * 使用浏览器现有时区本地化时间戳；精确报告日期保持不变。
+ */
 export function formatImportTime(timestamp: string): string {
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(timestamp));
+  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(timestamp));
 }
 
 /**
@@ -196,6 +201,6 @@ export function formatImportTime(timestamp: string): string {
  * 百分比变化及 CTR 百分点已由后端计算；不要再次乘以 100。
  */
 export function formatChange(value: string | number | null, unit = ""): string {
-  if (value === null) return "Unavailable / 不可计算";
-  return `${new Intl.NumberFormat("en", { maximumFractionDigits: 6, signDisplay: "exceptZero" }).format(Number(value))}${unit}`;
+  if (value === null) return "不可计算";
+  return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 6, signDisplay: "exceptZero" }).format(Number(value))}${unit}`;
 }

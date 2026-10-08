@@ -2,13 +2,9 @@ import { isCount, isRecord, requestJson } from "@/lib/gsc-api";
 import { isQualityObservation, type DataQuality, type QualityObservation } from "@/lib/data-quality";
 import type { PaginationMetadata, PerformanceComparison } from "@/lib/history-api";
 import { isDateCoverage } from "@/lib/report-scope";
+import { ChineseUiError, opportunityLabels } from "@/lib/zh-cn";
 
-export const OPPORTUNITY_LABELS = {
-  traffic_decline: "Traffic decline / 流量下降",
-  ctr_opportunity: "CTR opportunity / CTR 机会",
-  ranking_decline: "Ranking decline / 排名下降",
-  impression_growth_gap: "Impression growth gap / 展示增长缺口",
-} as const;
+export const OPPORTUNITY_LABELS = opportunityLabels;
 
 export type OpportunityType = keyof typeof OPPORTUNITY_LABELS;
 export type EvidenceValues = Record<string, number | string>;
@@ -158,7 +154,7 @@ export async function listOpportunities(page: number, pageSize: number, signal: 
     payload.total_pages !== Math.ceil(payload.total / pageSize) || !Array.isArray(payload.items) || !payload.items.every(isOpportunityCandidate) ||
     payload.items.length !== Math.max(0, Math.min(pageSize, payload.total - (page - 1) * pageSize)) ||
     new Set(payload.items.map((candidate) => [candidate.page_id, candidate.previous_snapshot_id, candidate.current_snapshot_id, candidate.opportunity_type].join(":"))).size !== payload.items.length) {
-    throw new Error("Unexpected opportunity response. 机会响应格式不符合预期。");
+    throw new ChineseUiError("SEO 机会响应格式异常，请刷新页面或检查后端版本。");
   }
   return payload as OpportunitiesResponse;
 }

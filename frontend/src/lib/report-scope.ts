@@ -1,34 +1,13 @@
 import { isCount, isRecord } from "@/lib/gsc-api";
+import { coverageLabels, deviceLabels, filterDimensionLabels, filterOperatorLabels, searchTypeLabels } from "@/lib/zh-cn";
 
-export const SEARCH_TYPE_LABELS = {
-  web: "Web / 网页",
-  image: "Image / 图片",
-  video: "Video / 视频",
-  news: "News / 新闻",
-} as const;
+export const SEARCH_TYPE_LABELS = searchTypeLabels;
 
-export const FILTER_DIMENSION_LABELS = {
-  country: "Country (ISO 3-letter code) / 国家（ISO 三字母代码）",
-  device: "Device / 设备",
-  search_appearance: "Search appearance / 搜索结果呈现",
-  query: "Query / 查询",
-  page: "Page / 网页",
-} as const;
+export const FILTER_DIMENSION_LABELS = filterDimensionLabels;
 
-export const FILTER_OPERATOR_LABELS = {
-  equals: "Equals / 等于",
-  not_equals: "Does not equal / 不等于",
-  contains: "Contains / 包含",
-  not_contains: "Does not contain / 不包含",
-  regex: "Matches regex / 匹配正则表达式",
-  not_regex: "Does not match regex / 不匹配正则表达式",
-} as const;
+export const FILTER_OPERATOR_LABELS = filterOperatorLabels;
 
-export const COVERAGE_LABELS = {
-  complete: "Complete observed 28-day coverage / 已观察完整 28 天覆盖",
-  partial: "Partial observed coverage / 已观察部分覆盖",
-  unknown: "Unknown coverage / 覆盖未知",
-} as const;
+export const COVERAGE_LABELS = coverageLabels;
 
 export type ScopeFilter = {
   dimension: keyof typeof FILTER_DIMENSION_LABELS;
@@ -125,9 +104,11 @@ export function isDateCoverage(value: unknown): boolean {
 
 export function formatCoverage(coverage: DateCoverage): string {
   return coverage.coverage_status === "unknown" ? COVERAGE_LABELS.unknown :
-    `${coverage.observed_date_count} / 28 observed dates / 已观察日期 · ${COVERAGE_LABELS[coverage.coverage_status]}`;
+    `已观察 ${coverage.observed_date_count} / 28 天 · ${COVERAGE_LABELS[coverage.coverage_status]}`;
 }
 
 export function formatFilter(filter: ScopeFilter): string {
-  return `${FILTER_DIMENSION_LABELS[filter.dimension]} · ${FILTER_OPERATOR_LABELS[filter.operator]} · ${filter.value}`;
+  const value = filter.dimension === "device" && Object.hasOwn(deviceLabels, filter.value)
+    ? deviceLabels[filter.value as keyof typeof deviceLabels] : filter.value;
+  return `${FILTER_DIMENSION_LABELS[filter.dimension]} · ${FILTER_OPERATOR_LABELS[filter.operator]} · ${value}`;
 }

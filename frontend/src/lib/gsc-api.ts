@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "@/lib/api";
 import { isDateCoverage, isReportScope, type DateCoverage, type ReportScope, type ScopeDeclaration } from "@/lib/report-scope";
+import { apiErrorMessage, ChineseUiError, trustedRequestErrorMessage } from "@/lib/zh-cn";
 
 export type PageMetrics = {
   url: string;
@@ -81,8 +82,8 @@ export function isPageMetrics(value: unknown): boolean {
 }
 
 /**
- * Read a JSON response and surface the API's human-readable error without a stack trace.
- * 读取 JSON 响应，并显示 API 提供的可读错误，不暴露堆栈信息。
+ * Read JSON and present known errors by stable code, never by untrusted backend prose.
+ * 读取 JSON，并通过稳定代码展示已知错误，绝不展示未经信任的后端文本。
  */
 export async function requestJson(path: string, options: RequestInit): Promise<unknown> {
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
@@ -94,16 +95,8 @@ export async function requestJson(path: string, options: RequestInit): Promise<u
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    if (isRecord(payload)) {
-      const detail = payload.detail;
-      if (isRecord(detail) && typeof detail.message === "string") {
-        throw new Error(detail.message);
-      }
-      if (typeof detail === "string") {
-        throw new Error(detail);
-      }
-    }
-    throw new Error(`Request failed (HTTP ${response.status}). 请求失败（HTTP ${response.status}）。`);
+    const code = isRecord(payload) && isRecord(payload.detail) ? payload.detail.code : null;
+    throw new ChineseUiError(apiErrorMessage(code, response.status, path));
   }
   return payload;
 }
@@ -145,7 +138,7 @@ export async function previewGscFile(file: File, scope: ScopeDeclaration, signal
     !/^[0-9a-f]{64}$/.test(payload.preview_hash) ||
     typeof payload.file_hash !== "string" || !/^[0-9a-f]{64}$/.test(payload.file_hash)
   ) {
-    throw new Error("Unexpected import preview response. 导入预览响应格式不符合预期。");
+    throw new ChineseUiError("导入预览响应格式异常，无法继续确认。请重新预览或检查后端版本。");
   }
   return payload as ImportPreview;
 }
@@ -172,7 +165,7 @@ export async function applyGscFile(
     typeof payload.import_run_id !== "string" ||
     typeof payload.already_processed !== "boolean"
   ) {
-    throw new Error("Unexpected import result response. 导入结果响应格式不符合预期。");
+    throw new ChineseUiError("导入结果响应格式异常。请先刷新导入历史确认结果，再决定是否重试。");
   }
   return payload as ImportResult;
 }
@@ -199,16 +192,13 @@ export async function listPages(
     !isCount(payload.total) ||
     !isCount(payload.total_pages)
   ) {
-    throw new Error("Unexpected pages response. 页面列表响应格式不符合预期。");
+    throw new ChineseUiError("网站页面响应格式异常，请刷新页面或检查后端版本。");
   }
   return payload as PagesResponse;
 }
 
 export function requestErrorMessage(error: unknown): string {
-  if (error instanceof Error && !["TypeError", "TimeoutError", "AbortError"].includes(error.name)) {
-    return error.message;
-  }
-  return "Could not reach the API or the request timed out. Check the backend connection. 无法连接 API 或请求超时，请检查后端连接。";
+  return trustedRequestErrorMessage(error);
 }
 
 /**
@@ -218,7 +208,7 @@ export function requestErrorMessage(error: unknown): string {
 export function formatMetric(value: string | number | null, percentage = false): string {
   if (value === null) return "—";
   const number = Number(value) * (percentage ? 100 : 1);
-  return `${new Intl.NumberFormat("en", { maximumFractionDigits: 4 }).format(number)}${percentage ? "%" : ""}`;
+  return `${new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 4 }).format(number)}${percentage ? "%" : ""}`;
 }
 
 /**

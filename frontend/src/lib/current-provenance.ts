@@ -1,12 +1,8 @@
 import { isQualityObservation, type QualityObservation } from "@/lib/data-quality";
 import { isCount, isRecord } from "@/lib/gsc-api";
+import { currentMetricLabels } from "@/lib/zh-cn";
 
-export const CURRENT_METRIC_LABELS = {
-  clicks_28d: "Clicks 28d / 28 天点击",
-  impressions_28d: "Impressions 28d / 28 天展示",
-  ctr: "CTR / 点击率",
-  average_position: "Average position / 平均排名",
-} as const;
+export const CURRENT_METRIC_LABELS = currentMetricLabels;
 
 export type CurrentMetricName = keyof typeof CURRENT_METRIC_LABELS;
 export type MetricProvenance = {

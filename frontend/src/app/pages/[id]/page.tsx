@@ -4,7 +4,7 @@ export default async function PageHistoryPage({ params }: { params: Promise<{ id
   const { id } = await params;
   return (
     <main className="wide">
-      <header><p className="eyebrow">Phase 7 · Read-only history and signals / 第七阶段 · 只读历史与信号</p><h1>Page performance history / 页面表现历史</h1></header>
+      <header><p className="eyebrow">历史指标与分析依据</p><h1>页面表现历史</h1></header>
       <PagePerformance key={id} pageId={id} />
     </main>
   );

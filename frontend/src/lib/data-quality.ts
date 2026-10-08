@@ -1,4 +1,5 @@
 import { isCount, isRecord } from "@/lib/gsc-api";
+import { qualityCountLabels } from "@/lib/zh-cn";
 
 export type QualityObservation = {
   code: string;
@@ -10,15 +11,7 @@ export type QualityObservation = {
   evidence: Record<string, unknown>;
 };
 
-export const QUALITY_COUNT_LABELS = {
-  total_snapshots: "Total snapshots / 全部快照",
-  exact_date_snapshots: "Exact dates / 日期已知快照",
-  unknown_date_snapshots: "Unknown dates / 日期未知快照",
-  snapshots_with_missing_metrics: "Missing metrics / 指标缺失快照",
-  distinct_exact_periods: "Distinct exact periods / 不同精确时间段",
-  revision_periods: "Periods with revisions / 存在修订的时间段",
-  compatible_exact_periods: "Compatible exact periods / 兼容精确时间段",
-} as const;
+export const QUALITY_COUNT_LABELS = qualityCountLabels;
 
 export type DataQuality = {
   page_id: string;
