@@ -7,41 +7,30 @@ import { OpportunityCandidates } from "@/components/opportunity-candidates";
 import { usePaginatedResource } from "@/lib/use-paginated-resource";
 import { listPrioritizedOpportunities, PRIORITY_LABELS, type OpportunityEligibilitySummary, type OpportunityFilters,
   type PrioritizedOpportunityCandidate, type PrioritizedOpportunitiesResponse, type PriorityTier } from "@/lib/opportunity-prioritization-api";
+import { priorityExplanation, qualityReasonLabel } from "@/lib/zh-cn";
 
 const INPUT_LABELS: Record<string, string> = {
-  previous_clicks: "Previous clicks / 前期点击", current_clicks: "Current clicks / 当期点击",
-  clicks_absolute_change: "Exact click change / 精确点击变化",
-  clicks_percentage_change_numerator: "Exact click percentage numerator / 精确点击百分比的分子",
-  clicks_percentage_change_denominator: "Exact click percentage denominator / 精确点击百分比的分母",
-  previous_impressions: "Previous impressions / 前期展示", current_impressions: "Current impressions / 当期展示",
-  impressions_absolute_change: "Exact impression change / 精确展示变化",
-  impressions_percentage_change_numerator: "Exact impression percentage numerator / 精确展示百分比的分子",
-  impressions_percentage_change_denominator: "Exact impression percentage denominator / 精确展示百分比的分母",
-  previous_ctr: "Previous CTR fraction / 前期 CTR 比例", current_ctr: "Current CTR fraction / 当期 CTR 比例",
-  ctr_percentage_point_change: "Exact CTR change (pp) / 精确 CTR 变化（百分点）",
-  previous_average_position: "Previous average position / 前期平均排名", current_average_position: "Current average position / 当期平均排名",
-  average_position_change: "Exact position worsening / 精确排名恶化幅度",
+  previous_clicks: "上一周期点击量", current_clicks: "当前周期点击量",
+  clicks_absolute_change: "精确点击量变化",
+  clicks_percentage_change_numerator: "精确点击量百分比变化的分子",
+  clicks_percentage_change_denominator: "精确点击量百分比变化的分母",
+  previous_impressions: "上一周期展示量", current_impressions: "当前周期展示量",
+  impressions_absolute_change: "精确展示量变化",
+  impressions_percentage_change_numerator: "精确展示量百分比变化的分子",
+  impressions_percentage_change_denominator: "精确展示量百分比变化的分母",
+  previous_ctr: "上一周期点击率（原始比例）", current_ctr: "当前周期点击率（原始比例）",
+  ctr_percentage_point_change: "精确点击率变化（百分点）",
+  previous_average_position: "上一周期平均排名", current_average_position: "当前周期平均排名",
+  average_position_change: "精确平均排名变化",
 };
 const THRESHOLD_LABELS: Record<string, { label: string; unit: string }> = {
-  minimum_previous_clicks: { label: "Previous clicks / 前期点击", unit: "" },
-  minimum_click_loss: { label: "Absolute click loss / 点击损失数量", unit: "" },
-  minimum_click_decline_percentage: { label: "Click decline / 点击下降幅度", unit: "%" },
-  minimum_impressions: { label: "Both periods' impressions / 两期展示", unit: "" },
-  minimum_ctr_decline_percentage_points: { label: "CTR decline / CTR 下降幅度", unit: " pp / 百分点" },
-  minimum_average_position_worsening: { label: "Average position worsening / 平均排名恶化幅度", unit: "" },
-  minimum_impressions_growth_percentage: { label: "Impression growth / 展示增长幅度", unit: "%" },
-};
-const GATE_LABELS: Record<string, string> = {
-  insufficient_history: "Insufficient comparable reporting periods / 可比报告时间段不足",
-  unknown_report_scope: "Uncertain report scope / 报告范围不确定",
-  incompatible_report_scope: "Conflicting report scope / 报告范围冲突",
-  unknown_reporting_dates: "Unknown exact reporting dates / 精确报告日期未知",
-  incomplete_date_coverage: "Incomplete observed date coverage / 已观察日期覆盖不完整",
-  unknown_date_coverage: "Unknown observed date coverage / 已观察日期覆盖未知",
-  overlapping_comparison_periods: "Overlapping comparison periods / 对比时间段重叠",
-  missing_metrics: "Missing comparison metrics / 对比指标缺失",
-  zero_percentage_baseline: "Zero percentage baseline / 百分比基准为零",
-  out_of_order_import: "Relevant out-of-order import / 相关导入乱序",
+  minimum_previous_clicks: { label: "上一周期点击量", unit: "" },
+  minimum_click_loss: { label: "点击量减少数量", unit: "" },
+  minimum_click_decline_percentage: { label: "点击量下降幅度", unit: "%" },
+  minimum_impressions: { label: "两个周期的展示量", unit: "" },
+  minimum_ctr_decline_percentage_points: { label: "点击率下降幅度", unit: " 个百分点" },
+  minimum_average_position_worsening: { label: "平均排名变差幅度", unit: "" },
+  minimum_impressions_growth_percentage: { label: "展示量增长幅度", unit: "%" },
 };
 
 /**
@@ -50,48 +39,51 @@ const GATE_LABELS: Record<string, string> = {
  */
 function PriorityEvidence({ candidate }: { candidate: PrioritizedOpportunityCandidate }) {
   return <div className="priority-evidence">
-    <p><span className="priority-label" data-priority-tier={candidate.priority_tier}>Priority / 优先级：{PRIORITY_LABELS[candidate.priority_tier]}</span></p>
-    <p>{candidate.priority_message}</p>
+    <p><span className="priority-label" data-priority-tier={candidate.priority_tier}>优先级：{PRIORITY_LABELS[candidate.priority_tier]}</span></p>
+    <p>{priorityExplanation(candidate)}</p>
     <details className="quality-details priority-details">
-      <summary>Priority inputs and thresholds / 优先级输入与门槛</summary>
-      <p>Rule version / 规则版本：<code>{candidate.priority_rule_version}</code><br />Reason code / 原因代码：<code>{candidate.priority_reason_code}</code></p>
-      <h4>Exact prioritization inputs / 精确优先级输入</h4>
+      <summary>优先级分析依据与规则阈值</summary>
+      <p>规则版本：<code>{candidate.priority_rule_version}</code><br />优先级原因代码：<code>{candidate.priority_reason_code}</code></p>
+      <h4>优先级计算的精确输入</h4>
       <dl className="mapping-list">{Object.entries(candidate.priority_inputs).map(([key, value]) => (
-        <div key={key}><dt>{INPUT_LABELS[key] ?? key}</dt><dd><code>{String(value)}</code></dd></div>
+        <div key={key}><dt>{INPUT_LABELS[key] ?? <>其他输入（<code>{key}</code>）</>}</dt><dd><code>{String(value)}</code></dd></div>
       ))}</dl>
       {["clicks", "impressions"].filter((metric) => Object.hasOwn(candidate.priority_inputs, `${metric}_percentage_change_numerator`)).map((metric) => (
-        <p key={metric}>Exact percentage change / 精确百分比变化：<code>{String(candidate.priority_inputs[`${metric}_percentage_change_numerator`])} / {String(candidate.priority_inputs[`${metric}_percentage_change_denominator`])}</code> %</p>
+        <p key={metric}>精确百分比变化：<code>{String(candidate.priority_inputs[`${metric}_percentage_change_numerator`])} / {String(candidate.priority_inputs[`${metric}_percentage_change_denominator`])}</code> %</p>
       ))}
-      <p>Tier boundaries use exact values, rather than rounded display percentages. 等级边界使用精确值，不使用舍入后的展示百分比。</p>
+      <p>优先级边界使用精确输入值判断。此处保留精确比率；展示百分比的舍入不会改变等级。</p>
       {(["high", "medium"] as const).map((tier) => <div key={tier}>
-        <h4>{PRIORITY_LABELS[tier]} thresholds / 门槛</h4>
-        <p>All conditions are required. High is checked first; otherwise Medium, then Low. 必须满足全部条件。先检查高等级，再检查中等级，否则为低等级。</p>
+        <h4>{PRIORITY_LABELS[tier]}规则阈值</h4>
+        <p>同一等级须同时满足全部条件。服务端先判断高优先级，再判断中优先级，其余已检测到的信号归为低优先级。</p>
         <dl className="mapping-list">{Object.entries(candidate.priority_thresholds[tier]).map(([key, value]) => (
-          <div key={key}><dt>{THRESHOLD_LABELS[key]?.label ?? key}</dt><dd>≥ {String(value)}{THRESHOLD_LABELS[key]?.unit ?? ""}</dd></div>
+          <div key={key}><dt>{THRESHOLD_LABELS[key]?.label ?? <>其他阈值（<code>{key}</code>）</>}</dt><dd>≥ {String(value)}{THRESHOLD_LABELS[key]?.unit ?? ""}</dd></div>
         ))}</dl>
       </div>)}
-      <p>These preliminary attention heuristics are not calibrated business-value or statistical-confidence assessments. 这些初步关注启发式并非经过校准的业务价值或统计置信度评估。</p>
+      <p>这些优先级规则仅表示对事实信号的关注程度，尚未经过真实站点校准，不是业务价值或统计置信度评估。</p>
     </details>
   </div>;
 }
 
 function EligibilitySummary({ summary }: { summary: OpportunityEligibilitySummary }) {
   const counts: [keyof Omit<OpportunityEligibilitySummary, "gate_reason_counts">, string][] = [
-    ["analyzed_pages", "Imported pages analyzed / 已分析导入页面"], ["eligible_pages", "Evidence-eligible pages / 证据合格页面"],
-    ["ineligible_pages", "Pages without eligible evidence / 证据不合格页面"], ["pages_with_candidates", "Pages with detected candidates / 检测到候选的页面"],
-    ["ready_pages_without_candidates", "Ready pages with no thresholds met / 就绪但未满足门槛的页面"], ["detected_candidates", "Detected candidates / 已检测候选"],
+    ["analyzed_pages", "已分析页面"], ["eligible_pages", "分析证据已就绪的页面"],
+    ["ineligible_pages", "分析证据尚未就绪的页面"], ["pages_with_candidates", "检测到 SEO 机会的页面"],
+    ["ready_pages_without_candidates", "证据已就绪但未达到检测阈值的页面"], ["detected_candidates", "已检测到的 SEO 机会"],
   ];
   const reasons = Object.entries(summary.gate_reason_counts).filter(([, count]) => count > 0);
   return <section className="eligibility-summary" data-opportunity-summary aria-labelledby="eligibility-heading">
-    <h3 id="eligibility-heading">Evidence and detection summary / 证据与检测摘要</h3>
-    <p>Counts cover all pages in the applied site filter before tier filtering and pagination. 计数覆盖已应用站点筛选中的全部页面，先于等级筛选与分页。</p>
+    <h3 id="eligibility-heading">分析依据与检测摘要</h3>
+    <p>以下统计覆盖所选站点的全部页面，不受优先级筛选或当前分页影响。</p>
     <dl className="summary-grid">{counts.map(([key, label]) => <div key={key}><dt>{label}</dt><dd data-summary-count={key}>{summary[key]}</dd></div>)}</dl>
     {reasons.length > 0 && <>
-      <h4>Unavailable evidence / 不可用证据</h4>
-      <ul>{reasons.map(([code, count]) => <li key={code} data-eligibility-reason={code}>{GATE_LABELS[code] ?? code}：{count}</li>)}</ul>
-      <p>A page may have several evidence limitations; reason counts overlap. 一个页面可能有多种证据限制；原因计数可以重叠。</p>
+      <h4>尚未就绪的分析依据</h4>
+      <ul>{reasons.map(([code, count]) => <li key={code} data-eligibility-reason={code}>{qualityReasonLabel(code)}：{count}</li>)}</ul>
+      <details className="quality-details"><summary>分析限制的原因代码</summary>
+        <ul>{reasons.map(([code, count]) => <li key={code}><code>{code}</code>：{count}</li>)}</ul>
+      </details>
+      <p>同一页面可能存在多种证据限制，因此各原因的页面计数可能重叠。</p>
     </>}
-    <p>No candidates does not establish that a site&apos;s SEO is healthy. 没有候选不能证明站点 SEO 健康。</p>
+    <p>未检测到 SEO 机会，并不能证明站点的 SEO 状况良好。</p>
   </section>;
 }
 
@@ -101,16 +93,16 @@ function EligibilitySummary({ summary }: { summary: OpportunityEligibilitySummar
  */
 function EmptyResult({ data, filters }: { data: PrioritizedOpportunitiesResponse; filters: OpportunityFilters }) {
   if (data.summary.analyzed_pages === 0) return <p data-priority-empty="no_pages">
-    {filters.siteId ? "No imported pages for the selected site. 所选站点没有已导入页面。" : "No imported pages. 尚无已导入页面。"} <Link href="/imports/gsc">Import GSC reports / 导入 GSC 报告</Link>.
+    {filters.siteId ? "所选站点尚无已导入页面。" : "尚无已导入页面。"} <Link href="/imports/gsc">导入 GSC 数据</Link>。
   </p>;
   if (data.total === 0 && data.summary.detected_candidates > 0) return <p data-priority-empty="filtered">
-    Candidates were detected, but none match this priority-tier filter. Change the tier filter to inspect them. 已检测到候选，但没有候选匹配当前优先级筛选。请更改等级筛选查看。
+    已检测到 SEO 机会，但没有结果匹配当前优先级筛选。请选择其他优先级或全部优先级查看。
   </p>;
   if (data.summary.detected_candidates === 0) return <div data-priority-empty="no_candidates">
-    {data.summary.ready_pages_without_candidates > 0 && <p>Ready evidence exists, but no configured detection thresholds were met. 已有就绪证据，但未满足任何已配置检测门槛。</p>}
-    {data.summary.ineligible_pages > 0 && <p>Some pages cannot be analyzed for opportunities because their evidence is unavailable or limited. See the evidence reasons above. 部分页面的证据不可用或有限，无法检测机会。请查看上方证据原因。</p>}
+    {data.summary.ready_pages_without_candidates > 0 && <p>部分页面的分析证据已就绪，但未达到任何已配置的检测规则阈值。</p>}
+    {data.summary.ineligible_pages > 0 && <p>部分页面因证据不足或证据有限，暂时无法检测 SEO 机会。请查看上方列出的证据限制。</p>}
   </div>;
-  return <p data-priority-empty="page">No candidates on this result page. Use the pagination controls to return to available results. 此结果页没有候选，请使用分页控制返回已有结果。</p>;
+  return <p data-priority-empty="page">当前结果页没有 SEO 机会，请使用分页控件返回有结果的页面。</p>;
 }
 
 function PrioritizedList({ filters }: { filters: OpportunityFilters }) {
@@ -118,9 +110,9 @@ function PrioritizedList({ filters }: { filters: OpportunityFilters }) {
   const state = usePaginatedResource(load);
   const { data, loading, error } = state;
   return <>
-    <p>Applied site / 已应用站点：<code>{filters.siteId || "All imported sites / 全部已导入站点"}</code> · Tier / 等级：{filters.priorityTier ? PRIORITY_LABELS[filters.priorityTier] : "All / 全部"}</p>
+    <p>当前站点筛选：<code>{filters.siteId || "全部已导入站点"}</code> · 优先级筛选：{filters.priorityTier ? PRIORITY_LABELS[filters.priorityTier] : "全部优先级"}</p>
     <HistoryControls {...state} />
-    {loading && <p role="status">Loading prioritized opportunities… / 正在加载优先级机会……</p>}
+    {loading && <p role="status">正在加载 SEO 机会优先级……</p>}
     {error && <p className="notice error" role="alert">{error}</p>}
     {!loading && !error && data && <>
       <EligibilitySummary summary={data.summary} />
@@ -147,7 +139,7 @@ export function PrioritizedOpportunities() {
     event.preventDefault();
     const normalizedSite = siteId.trim().toLowerCase();
     if (normalizedSite && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(normalizedSite)) {
-      setFilterError("Enter a valid site UUID or leave the field blank. 请填写有效站点 UUID，或保留空白。");
+      setFilterError("请输入有效的站点 UUID；留空可查看全部站点。");
       return;
     }
     setFilterError(null);
@@ -157,22 +149,22 @@ export function PrioritizedOpportunities() {
     }
   }
   return <section className="card" data-opportunity-view="prioritized" aria-labelledby="prioritized-heading">
-    <h2 id="prioritized-heading">Prioritized opportunities / 已分配优先级的机会</h2>
-    <p>High → Medium → Low, then URL, opportunity type, and page ID. Pagination counts candidates; every independent signal is retained. 高 → 中 → 低，其次按 URL、机会类型与页面 ID 排序。分页统计候选；每个独立信号均保留。</p>
-    <p>Priority means attention to an observed signal. It does not estimate business value, traffic recovery, or an appropriate SEO action. 优先级表示对已观察信号的关注程度，不估算业务价值、流量恢复或合适的 SEO 行动。</p>
+    <h2 id="prioritized-heading">SEO 机会优先级</h2>
+    <p>按高、中、低优先级排列；同一等级按 URL、机会类型与页面 ID 排序。分页按 SEO 机会计数，同一页面的多个独立信号分别保留。</p>
+    <p>优先级表示对已观察信号的关注程度，不估算业务价值、流量恢复，也不提供 SEO 行动建议。</p>
     <form className="opportunity-filters" onSubmit={applyFilters} noValidate>
-      <label htmlFor="opportunity-site-id">Optional site ID / 可选站点 ID
+      <label htmlFor="opportunity-site-id">站点 UUID（选填）
         <input id="opportunity-site-id" type="text" value={siteId} autoComplete="off" aria-describedby="site-filter-help"
-          onChange={(event) => setSiteId(event.target.value)} placeholder="Site UUID / 站点 UUID" />
+          onChange={(event) => setSiteId(event.target.value)} placeholder="输入站点 UUID" />
       </label>
-      <label htmlFor="priority-tier">Priority tier / 优先级
+      <label htmlFor="priority-tier">优先级筛选
         <select id="priority-tier" value={tier} onChange={(event) => setTier(event.target.value as PriorityTier | "all")}>
-          <option value="all">All / 全部</option>{Object.entries(PRIORITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          <option value="all">全部优先级</option>{Object.entries(PRIORITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
-      <button type="submit">Apply filters / 应用筛选</button>
+      <button type="submit">应用筛选</button>
     </form>
-    <p id="site-filter-help"><small>Recorded site IDs appear in import history. Blank selects all imported sites, including unknown-site pages. 导入历史显示已记录站点 ID。空白表示全部已导入站点，包括站点未知的页面。</small></p>
+    <p id="site-filter-help"><small>站点 UUID 可在导入历史中查看。留空表示全部已导入站点，包括尚未记录站点身份的页面。</small></p>
     {filterError && <p className="notice error" role="alert">{filterError}</p>}
     <PrioritizedList key={`${filters.siteId}:${filters.priorityTier}`} filters={filters} />
   </section>;

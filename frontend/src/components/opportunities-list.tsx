@@ -15,13 +15,13 @@ export function OpportunitiesList() {
   const state = usePaginatedResource(load);
   const { data, loading, error } = state;
   return <section className="card" data-opportunity-view="neutral" aria-labelledby="candidate-list-heading">
-    <h2 id="candidate-list-heading">Detected candidates / 已检测候选</h2>
-    <p>Ordered by URL, opportunity type, and page ID. Pagination counts candidates, including multiple signals for one page. 按 URL、机会类型及页面 ID 排序。分页统计候选，包括同一页面的多个信号。</p>
+    <h2 id="candidate-list-heading">原始 SEO 机会</h2>
+    <p>按 URL、机会类型与页面 ID 排列，不按优先级排序。分页按 SEO 机会计数，同一页面的多个信号分别显示。</p>
     <HistoryControls {...state} />
-    {loading && <p role="status">Loading opportunity candidates… / 正在加载机会候选……</p>}
+    {loading && <p role="status">正在加载 SEO 机会……</p>}
     {error && <p className="notice error" role="alert">{error}</p>}
     {!loading && !error && data && <>
-      {data.items.length === 0 ? <p data-opportunity-empty>No opportunity candidates on this page. Detection requires ready evidence, compatible scope, complete observed periods, and a met v1 rule threshold. The prioritized view provides import-readiness summary counts. 本页没有机会候选。检测要求证据就绪、范围兼容、已观察时间段完整，且满足 v1 规则门槛。优先级视图提供导入就绪度摘要计数。</p> : <OpportunityCandidates candidates={data.items} />}
+      {data.items.length === 0 ? <p data-opportunity-empty>当前结果页没有 SEO 机会。检测需要分析证据已就绪、报告范围兼容、观察日期覆盖完整，并达到 v1 检测规则阈值。请切换到优先级视图，查看证据就绪情况与检测摘要。</p> : <OpportunityCandidates candidates={data.items} />}
       <HistoryPagination data={data} loading={loading} changePage={state.changePage} />
     </>}
   </section>;

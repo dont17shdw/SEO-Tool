@@ -14,7 +14,7 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   line-height: 1.65;
 }
 
@@ -25,6 +25,20 @@ main {
 
 main.wide {
   width: min(100% - 2.5rem, 76rem);
+}
+
+/* Keep the native file input accessible while presenting Chinese selection controls.
+   保留原生文件输入的辅助技术支持，同时显示中文文件选择控件。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .site-nav {
@@ -56,6 +70,11 @@ input[type="file"] {
   width: 100%;
   margin: 0.75rem 0;
   font: inherit;
+}
+
+input[type="file"].visually-hidden {
+  width: 1px;
+  margin: -1px;
 }
 
 input[type="file"]::file-selector-button {
@@ -337,7 +356,7 @@ h1 {
   margin: 0.25rem 0 0.75rem;
   font-size: clamp(2.2rem, 7vw, 3.25rem);
   line-height: 1.2;
-  letter-spacing: -0.035em;
+  letter-spacing: normal;
 }
 
 h2 {
@@ -404,6 +423,8 @@ button {
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 button:hover:not(:disabled) {

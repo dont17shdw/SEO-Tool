@@ -1,3 +1,5 @@
+import { apiErrorMessage, ChineseUiError } from "@/lib/zh-cn";
+
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 ).replace(/\/+$/, "");
@@ -18,7 +20,7 @@ export async function checkBackendHealth(): Promise<HealthResponse> {
   });
 
   if (!response.ok) {
-    throw new Error(`Backend returned HTTP ${response.status}. 后端返回 HTTP ${response.status}。`);
+    throw new ChineseUiError(apiErrorMessage(null, response.status));
   }
 
   const payload: unknown = await response.json();
@@ -33,7 +35,7 @@ export async function checkBackendHealth(): Promise<HealthResponse> {
     !("service" in payload) ||
     typeof payload.service !== "string"
   ) {
-    throw new Error("Unexpected health response. 健康检查响应格式不符合预期。");
+    throw new ChineseUiError("后端健康检查响应格式异常，请检查后端连接与版本。");
   }
 
   return { status: payload.status, service: payload.service };

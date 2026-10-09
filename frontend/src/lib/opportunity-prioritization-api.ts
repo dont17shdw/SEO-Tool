@@ -1,8 +1,9 @@
 import { isCount, isRecord, requestJson } from "@/lib/gsc-api";
 import type { PaginationMetadata } from "@/lib/history-api";
 import { isOpportunityCandidate, type EvidenceValues, type OpportunityCandidate, type OpportunityType } from "@/lib/opportunities-api";
+import { ChineseUiError, priorityLabels } from "@/lib/zh-cn";
 
-export const PRIORITY_LABELS = { high: "High / 高", medium: "Medium / 中", low: "Low / 低" } as const;
+export const PRIORITY_LABELS = priorityLabels;
 export type PriorityTier = keyof typeof PRIORITY_LABELS;
 export type OpportunityFilters = { siteId: string; priorityTier: PriorityTier | "" };
 export type PrioritizedOpportunityCandidate = OpportunityCandidate & {
@@ -119,7 +120,7 @@ export async function listPrioritizedOpportunities(page: number, pageSize: numbe
     !payload.items.every((candidate) => (!filters.priorityTier || candidate.priority_tier === filters.priorityTier) &&
       (!filters.siteId || candidate.site_id === filters.siteId)) ||
     new Set(payload.items.map((candidate) => [candidate.page_id, candidate.previous_snapshot_id, candidate.current_snapshot_id, candidate.opportunity_type].join(":"))).size !== payload.items.length) {
-    throw new Error("Unexpected prioritized opportunity response. 优先级机会响应格式不符合预期。");
+    throw new ChineseUiError("SEO 机会优先级响应格式异常，请刷新页面或检查后端版本。");
   }
   return payload as PrioritizedOpportunitiesResponse;
 }

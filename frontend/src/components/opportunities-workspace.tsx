@@ -11,9 +11,9 @@ import { PrioritizedOpportunities } from "@/components/prioritized-opportunities
 export function OpportunitiesWorkspace() {
   const [view, setView] = useState<"prioritized" | "neutral">("prioritized");
   return <>
-    <div className="toolbar opportunity-view-controls" role="group" aria-label="Opportunity views / 机会视图">
-      <button type="button" aria-pressed={view === "prioritized"} onClick={() => setView("prioritized")}>Prioritized view / 优先级视图</button>
-      <button type="button" aria-pressed={view === "neutral"} onClick={() => setView("neutral")}>Original factual signals / 原始事实信号</button>
+    <div className="toolbar opportunity-view-controls" role="group" aria-label="SEO 机会视图">
+      <button type="button" aria-pressed={view === "prioritized"} onClick={() => setView("prioritized")}>优先级视图</button>
+      <button type="button" aria-pressed={view === "neutral"} onClick={() => setView("neutral")}>原始事实信号</button>
     </div>
     {view === "prioritized" ? <PrioritizedOpportunities /> : <OpportunitiesList />}
   </>;

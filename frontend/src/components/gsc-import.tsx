@@ -7,6 +7,7 @@ import { GscScopeInput } from "@/components/gsc-scope-input";
 import { ReportScopeSummary } from "@/components/report-scope-summary";
 import { formatPeriod } from "@/lib/history-api";
 import { type ScopeDeclaration } from "@/lib/report-scope";
+import { fieldLabel, importRowErrorMessage } from "@/lib/zh-cn";
 import {
   applyGscFile,
   previewGscFile,
@@ -32,6 +33,7 @@ export function GscImport() {
   const [error, setError] = useState<string | null>(null);
   const requestVersion = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => () => controller.current?.abort(), []);
 
@@ -51,9 +53,9 @@ export function GscImport() {
     setStage("idle");
     setError(
       nextFile && !/\.(csv|xlsx)$/i.test(nextFile.name)
-        ? "Select a CSV or XLSX file. 请选择 CSV 或 XLSX 文件。"
+        ? "请选择 CSV 或 XLSX 文件。"
         : nextFile && nextFile.size > MAX_FILE_BYTES
-          ? "The file exceeds the 5 MiB upload limit. 文件超过 5 MiB 上传限制。"
+          ? "文件超过 5 MiB 上传限制，请选择较小的导出文件。"
           : null,
     );
   }
@@ -133,63 +135,67 @@ export function GscImport() {
   return (
     <>
       <section className="card" aria-labelledby="upload-heading">
-        <h2 id="upload-heading">1. Select and preview / 选择并预览</h2>
+        <h2 id="upload-heading">1. 选择文件并预览</h2>
         <p>
-          Export the GSC Pages report for the latest 28 days or a supported custom 28-day calendar range. English and Chinese CSV/XLSX exports are supported.
-          <span lang="zh"> 请导出最近 28 天或受支持的自定义 28 个日历日范围的 GSC 网页报告。支持英文和中文 CSV/XLSX 导出。</span>
+          请选择 GSC 导出的完整 28 天网页表现报告。支持英文或中文 CSV/XLSX 文件，以及最近 28 天或受支持的自定义 28 个日历日范围。
         </p>
-        <p>For opportunity analysis, use two non-overlapping 28-day XLSX reports with matching property, search type, and complete non-date filters. Preview must show 28 consecutive observed dates for each; declared bounds alone do not prove coverage. 机会分析需要两个不重叠的 28 天 XLSX 报告，属性、搜索类型及完整非日期筛选一致。每次预览必须显示 28 个连续已观察日期；仅有声明起止日期不能证明覆盖。</p>
+        <p>分析 SEO 机会需要两个互不重叠的 28 天 XLSX 报告，且 GSC 属性、搜索类型和完整的非日期筛选条件一致。两个报告的预览都必须显示 28 个连续的已观察日期。仅声明起止日期不能证明日期覆盖完整；CSV 文件不提供可核验的逐日日期依据。</p>
         <p>
-          Preview validates only; it does not save any pages. Limit: 5 MiB and 10,000 data rows.
-          <span lang="zh"> 预览仅做校验，不会保存页面。限制为 5 MiB 和 10,000 行数据。</span>
+          预览只校验文件，不会保存任何页面。文件大小上限为 5 MiB，数据行数上限为 10,000 行。
         </p>
-        <label className="field-label" htmlFor="gsc-file">GSC Pages export / GSC 网页导出文件</label>
-        <input id="gsc-file" type="file" accept=".csv,.xlsx" onChange={selectFile} disabled={stage === "applying"} />
-        {file && <p className="selected-file">Selected / 已选择：{file.name}</p>}
+        <label className="field-label" htmlFor="gsc-file">GSC 网页导出文件</label>
+        <input ref={fileInput} id="gsc-file" className="visually-hidden" type="file" accept=".csv,.xlsx" aria-label="选择 GSC 网页导出文件" tabIndex={-1} onChange={selectFile} disabled={stage === "applying"} />
+        <button type="button" onClick={() => fileInput.current?.click()} disabled={stage === "applying"}>选择文件</button>
+        <p className="selected-file" aria-live="polite">{file ? <>已选择：{file.name}</> : "尚未选择文件"}</p>
         <GscScopeInput scope={scope} onChange={updateScope} disabled={stage === "applying"} />
         <button type="button" onClick={uploadPreview} disabled={!fileIsSupported || stage !== "idle"}>
-          {stage === "previewing" ? "Validating… / 校验中……" : "Upload / Preview · 上传 / 预览"}
+          {stage === "previewing" ? "正在校验……" : "上传并预览"}
         </button>
       </section>
 
       {error && <p className="notice error" role="alert">{error}</p>}
-      {stage !== "idle" && <p role="status">{stage === "previewing" ? "Preparing preview… / 正在生成预览……" : "Importing pages… / 正在导入页面……"}</p>}
+      {stage !== "idle" && <p role="status">{stage === "previewing" ? "正在生成预览……" : "正在导入页面……"}</p>}
 
       {preview && (
         <section className="card" aria-labelledby="preview-heading">
-          <h2 id="preview-heading">2. Review preview / 检查预览</h2>
+          <h2 id="preview-heading">2. 检查预览</h2>
           <dl className="summary-grid">
-            <div><dt>Source / 数据源</dt><dd>Google Search Console Pages / 网页</dd></div>
-            <div><dt>Sheet / 工作表</dt><dd>{preview.detected_sheet ?? "CSV (no sheet) / CSV（无工作表）"}</dd></div>
-            <div><dt>Window / 时间窗口</dt><dd>28-day report family / 28 天报告类别</dd></div>
-            <div><dt>Exact report dates / 精确报告日期</dt><dd>{formatPeriod(preview)}</dd></div>
-            <div><dt>Total rows / 总行数</dt><dd>{preview.total_rows}</dd></div>
-            <div><dt>Valid rows / 有效行</dt><dd>{preview.valid_rows}</dd></div>
-            <div><dt>Invalid rows / 无效行</dt><dd>{preview.invalid_rows}</dd></div>
-            <div><dt>Duplicate rows / 重复行</dt><dd>{preview.duplicate_rows}</dd></div>
+            <div><dt>数据来源</dt><dd>GSC 网页表现报告</dd></div>
+            <div><dt>源工作表</dt><dd>{preview.detected_sheet ?? "CSV（无工作表）"}</dd></div>
+            <div><dt>报告窗口</dt><dd>28 天报告</dd></div>
+            <div><dt>精确报告日期</dt><dd>{formatPeriod(preview)}</dd></div>
+            <div><dt>总行数</dt><dd>{preview.total_rows}</dd></div>
+            <div><dt>有效行数</dt><dd>{preview.valid_rows}</dd></div>
+            <div><dt>无效行数</dt><dd>{preview.invalid_rows}</dd></div>
+            <div><dt>重复行数</dt><dd>{preview.duplicate_rows}</dd></div>
           </dl>
 
-          <h3>Report scope and observed coverage / 报告范围与已观察覆盖</h3>
+          <h3>报告范围与已观察日期覆盖</h3>
           <ReportScopeSummary scope={preview.report_scope} coverage={preview} showEvidence />
-          <p>Known endpoints alone do not establish complete coverage. Unknown scope may be imported, but it cannot prove that reports are scope-compatible. 仅有已知起止日期不能证明完整覆盖。未知范围可以导入，但无法证明报告范围兼容。</p>
+          <p>仅有已知起止日期不能证明日期覆盖完整。报告范围未知时仍可导入，但无法证明两个报告的范围兼容。</p>
 
-          <h3>Detected column mapping / 已识别的列映射</h3>
-          <dl className="mapping-list">
-            {Object.entries(preview.column_mapping).map(([field, header]) => (
-              <div key={field}><dt><code>{field}</code></dt><dd>{header}</dd></div>
-            ))}
-          </dl>
+          <details className="quality-details">
+            <summary>查看已识别的数据列与源文件字段</summary>
+            <dl className="mapping-list">
+              {Object.entries(preview.column_mapping).map(([field, header]) => (
+                <div key={field}><dt>{fieldLabel(field)}（<code>{field}</code>）</dt><dd>{header}</dd></div>
+              ))}
+            </dl>
+            <p>源文件列名保留原文，便于核对导出文件。</p>
+          </details>
 
           {preview.errors.length > 0 && (
             <>
-              <h3>Validation errors / 校验错误</h3>
-              <p>Showing up to 100 errors. Row numbers refer to the source file, including the header. 显示最多 100 条错误。行号对应源文件，并包含标题行。</p>
-              <div className="table-scroll" tabIndex={0} role="region" aria-label="Validation errors / 校验错误">
+              <h3>校验错误</h3>
+              <p>最多显示 100 条错误。行号对应源文件的位置，包含标题行。</p>
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="文件校验错误">
                 <table>
-                  <thead><tr><th scope="col">Row / 行</th><th scope="col">Field / 字段</th><th scope="col">Error / 错误</th></tr></thead>
+                  <thead><tr><th scope="col">行号</th><th scope="col">字段</th><th scope="col">错误说明</th></tr></thead>
                   <tbody>{preview.errors.map((error, index) => (
                     <tr key={`${error.row}-${error.field}-${error.code}-${index}`}>
-                      <td>{error.row}</td><td><code>{error.field}</code></td><td>{error.message}</td>
+                      <td>{error.row}</td><td>{fieldLabel(error.field)}</td><td>{importRowErrorMessage(error.code)}
+                        <details><summary>查看错误标识</summary><p>错误代码：<code>{error.code}</code>；字段：<code>{error.field}</code></p></details>
+                      </td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -197,28 +203,27 @@ export function GscImport() {
             </>
           )}
 
-          <h3>Normalized sample / 标准化样本</h3>
-          <p>Up to 10 valid rows. Unknown metrics remain NULL (shown as —); CTR is displayed as a percentage. 最多 10 条有效行。未知指标保持 NULL（显示为 —）；CTR 显示为百分比。</p>
+          <h3>标准化数据样本</h3>
+          <p>最多显示 10 条有效数据。未知指标保持为空（显示为 —），点击率（CTR）显示为百分比。</p>
           {preview.sample_rows.length > 0
             ? <PageMetricsTable rows={preview.sample_rows} showRowNumber />
-            : <p>No valid sample rows. 没有有效样本行。</p>}
+            : <p>没有可显示的有效样本。</p>}
 
           {!preview.can_apply ? (
             <p className="notice error" role="status">
-              Import blocked. Correct every invalid or duplicate row, then select the corrected file and preview again. Duplicate URLs are not aggregated.
-              <span lang="zh"> 导入已阻止。请修正所有无效或重复行，重新选择修正后的文件并预览。重复 URL 不会合并。</span>
+              当前文件无法导入。请修正所有无效或重复行，然后重新选择修正后的文件并预览。重复 URL 的数据不会自动合并。
             </p>
           ) : (
             <div className="confirmation">
-              <h3>3. Confirm import / 确认导入</h3>
-              <p>Within the recorded site namespace, new URLs create records; matched URLs update only supplied GSC metrics. 在已记录站点命名空间内，新 URL 创建记录；匹配 URL 仅更新所提供的 GSC 指标。</p>
-              <p>Blank metrics stay NULL for new pages and preserve existing values for matched URLs. 空白指标在新页面中保持 NULL，在匹配到的现有 URL 中保留原值。</p>
+              <h3>3. 确认导入</h3>
+              <p>系统会在已记录站点范围内为新 URL 创建页面记录；匹配到现有 URL 时，只更新本次文件提供的 GSC 指标。</p>
+              <p>空白指标在新页面中保持为空，匹配到现有页面时则保留原值。</p>
               <label className="checkbox-label">
                 <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={stage !== "idle" || result !== null} />
-                <span>I confirm this is a supported 28-day Pages report and want to import the previewed file with the dates and scope shown above. 我确认这是受支持的 28 天网页报告，并希望使用上方显示的日期与范围导入当前预览文件。</span>
+                <span>我确认这是受支持的 28 天网页报告，并同意按上方显示的日期和报告范围导入当前预览文件。</span>
               </label>
               <button type="button" onClick={importFile} disabled={!confirmed || stage !== "idle" || result !== null}>
-                {stage === "applying" ? "Importing… / 导入中……" : "Import / 导入"}
+                {stage === "applying" ? "正在导入……" : "确认导入"}
               </button>
             </div>
           )}
@@ -227,17 +232,17 @@ export function GscImport() {
 
       {result && (
         <section className="card" role="status" aria-labelledby="result-heading">
-          <h2 id="result-heading">{result.already_processed ? "Already processed / 已处理" : "Import complete / 导入完成"}</h2>
-          {result.already_processed && <p>This exact file was already imported under the same canonical scope. No new history, snapshots, page changes, or provenance updates were applied. 此文件此前已在相同规范范围下导入。本次未新增历史、快照、页面变更或来源更新。</p>}
+          <h2 id="result-heading">{result.already_processed ? "此文件已导入" : "导入完成"}</h2>
+          {result.already_processed && <p>此文件此前已按相同的规范报告范围导入，本次未新增导入历史或快照，也未更改页面指标或指标来源。</p>}
           <dl className="summary-grid">
-            <div><dt>Created / 新建</dt><dd>{result.created_count}</dd></div>
-            <div><dt>Updated / 更新</dt><dd>{result.updated_count}</dd></div>
-            <div><dt>Skipped / 跳过</dt><dd>{result.skipped_count}</dd></div>
-            <div><dt>Errors / 错误</dt><dd>{result.error_count}</dd></div>
+            <div><dt>新建页面</dt><dd>{result.created_count}</dd></div>
+            <div><dt>更新页面</dt><dd>{result.updated_count}</dd></div>
+            <div><dt>跳过行数</dt><dd>{result.skipped_count}</dd></div>
+            <div><dt>错误数</dt><dd>{result.error_count}</dd></div>
           </dl>
-          <Link href="/pages">View imported pages / 查看已导入页面 →</Link>
-          <p><Link href="/imports/history">View import history / 查看导入历史 →</Link></p>
-          <p><small>Import ID / 导入 ID：{result.import_run_id}</small></p>
+          <Link href="/pages">查看网站页面 →</Link>
+          <p><Link href="/imports/history">查看导入历史 →</Link></p>
+          <details><summary>查看导入标识</summary><p>导入 ID：<code>{result.import_run_id}</code></p></details>
         </section>
       )}
     </>

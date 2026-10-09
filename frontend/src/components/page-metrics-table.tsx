@@ -1,4 +1,5 @@
 import { formatMetric, type PageMetrics } from "@/lib/gsc-api";
+import { metricLabel } from "@/lib/zh-cn";
 import Link from "next/link";
 
 export function PageMetricsTable({
@@ -11,23 +12,23 @@ export function PageMetricsTable({
   linkToHistory?: boolean;
 }) {
   return (
-    <div className="table-scroll" tabIndex={0} role="region" aria-label="Page metrics / 页面指标">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="页面指标">
       <table>
         <thead>
           <tr>
-            {showRowNumber && <th scope="col">Row / 行</th>}
+            {showRowNumber && <th scope="col">行号</th>}
             <th scope="col">URL</th>
-            <th scope="col">Clicks 28d / 28 天点击</th>
-            <th scope="col">Impressions 28d / 28 天展示</th>
-            <th scope="col">CTR / 点击率</th>
-            <th scope="col">Average position / 平均排名</th>
+            <th scope="col">{metricLabel("clicks_28d")}</th>
+            <th scope="col">{metricLabel("impressions_28d")}</th>
+            <th scope="col">{metricLabel("ctr")}</th>
+            <th scope="col">{metricLabel("average_position")}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id ?? row.row ?? row.url}>
               {showRowNumber && <td>{row.row}</td>}
-              <td className="url-cell">{linkToHistory && row.id ? <Link href={`/pages/${row.id}`}>{row.url}<br /><small>View history / 查看历史 →</small></Link> : row.url}</td>
+              <td className="url-cell">{linkToHistory && row.id ? <Link href={`/pages/${row.id}`}>{row.url}<br /><small>查看表现历史 →</small></Link> : row.url}</td>
               <td>{formatMetric(row.clicks_28d)}</td>
               <td>{formatMetric(row.impressions_28d)}</td>
               <td>{formatMetric(row.ctr, true)}</td>

@@ -1,18 +1,7 @@
 import { CURRENT_METRIC_LABELS, type CurrentProvenance } from "@/lib/current-provenance";
 import { formatMetric } from "@/lib/gsc-api";
 import { formatImportTime, formatPeriod } from "@/lib/history-api";
-
-const STATUS_LABELS = {
-  known: "Known source / 已知来源",
-  unknown: "Unknown source / 未知来源",
-  unavailable: "Unavailable / 指标不可用",
-};
-
-const SEVERITY_LABELS = {
-  info: "Info / 信息",
-  warning: "Warning / 警告",
-  blocking: "Blocking evidence / 证据不足",
-};
+import { provenanceStatusLabels, qualityObservationMessage, qualityReasonLabel, severityLabels } from "@/lib/zh-cn";
 
 /**
  * Show only explicitly recorded per-field sources, separate from historical comparison readiness.
@@ -21,33 +10,33 @@ const SEVERITY_LABELS = {
 export function PageMetricProvenance({ provenance }: { provenance: CurrentProvenance }) {
   return (
     <section className="card" aria-labelledby="provenance-heading">
-      <h2 id="provenance-heading">Current metric provenance / 当前指标来源</h2>
-      <p>Sources refer to the latest successfully applied nonblank value for each field. An older reporting period imported later can supply a current value. Matching historical values do not establish a source. 来源对应每个字段最近成功应用的非空白值。较旧报告后来导入时也可提供当前值。历史值相同不能证明来源。</p>
+      <h2 id="provenance-heading">当前指标来源</h2>
+      <p>来源记录对应每个字段最近一次成功应用的非空白值。较旧报告后来导入时，也可能提供当前值；历史快照的数值相同，不能据此确定来源。</p>
       <dl className="summary-grid">
-        <div><dt>Known provenance / 已知来源</dt><dd>{provenance.known_provenance_count}</dd></div>
-        <div><dt>Unknown provenance / 未知来源</dt><dd>{provenance.unknown_provenance_count}</dd></div>
-        <div><dt>Unavailable metrics / 不可用指标</dt><dd>{provenance.unavailable_metric_count}</dd></div>
+        <div><dt>已知来源的指标数</dt><dd>{provenance.known_provenance_count}</dd></div>
+        <div><dt>来源未知的指标数</dt><dd>{provenance.unknown_provenance_count}</dd></div>
+        <div><dt>不可用指标数</dt><dd>{provenance.unavailable_metric_count}</dd></div>
       </dl>
       <p>
         {provenance.all_known_metrics_share_one_snapshot === null
-          ? "No current metrics have a proven source. 当前没有指标具有可证明的来源。"
+          ? "当前没有指标具有明确记录的来源。"
           : provenance.all_known_metrics_share_one_snapshot
-            ? "All metrics with known provenance share one snapshot; other metric sources may remain unknown or unavailable. 所有已知来源指标共用一个快照；其他指标来源可能仍未知或不可用。"
-            : "Metrics with known provenance reference different snapshots. 已知来源指标指向不同快照。"}
+            ? "所有已知来源的指标均来自同一个快照；其他指标的来源可能仍然未知或不可用。"
+            : "已知来源的指标来自不同快照。"}
       </p>
-      <div className="table-scroll" tabIndex={0} role="region" aria-label="Current metric provenance / 当前指标来源">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="当前指标来源">
         <table>
           <thead><tr>
-            <th scope="col">Metric / 指标</th><th scope="col">Current value / 当前值</th><th scope="col">Source status / 来源状态</th>
-            <th scope="col">Snapshot / 快照</th><th scope="col">Import / 导入</th><th scope="col">Report period / 报告时间段</th><th scope="col">Imported / 导入时间</th>
+            <th scope="col">指标</th><th scope="col">当前值</th><th scope="col">来源状态</th>
+            <th scope="col">来源快照</th><th scope="col">来源导入</th><th scope="col">报告周期</th><th scope="col">导入时间</th>
           </tr></thead>
           <tbody>{provenance.metrics.map((metric) => (
             <tr key={metric.metric_name} data-metric-name={metric.metric_name}>
               <th scope="row">{CURRENT_METRIC_LABELS[metric.metric_name]}</th>
               <td>{formatMetric(metric.current_value, metric.metric_name === "ctr")}</td>
               <td data-provenance-status={metric.status}>
-                {STATUS_LABELS[metric.status]}
-                {metric.status === "unknown" && <p><small>Current value without proven provenance. 当前值没有可证明的来源。</small></p>}
+                {provenanceStatusLabels[metric.status]}
+                {metric.status === "unknown" && <p><small>当前值尚无明确记录的来源。</small></p>}
               </td>
               <td className="url-cell"><small>{metric.snapshot_id ?? "—"}</small></td>
               <td className="url-cell"><small>{metric.import_run_id ?? "—"}</small></td>
@@ -57,19 +46,20 @@ export function PageMetricProvenance({ provenance }: { provenance: CurrentProven
           ))}</tbody>
         </table>
       </div>
-      <p>Import timestamps use your browser&apos;s time zone. Current-source observations do not change historical comparison readiness. 导入时间采用浏览器时区。当前来源观察不会改变历史对比就绪度。</p>
+      <p>导入时间采用浏览器时区。当前指标来源的观察结果不会改变历史周期对比的就绪状态。</p>
       {provenance.observations.length > 0 && (
         <>
-          <h3>Current-source observations / 当前来源观察</h3>
+          <h3>当前指标来源的观察结果</h3>
           <ul className="quality-observations">
             {provenance.observations.map((observation, index) => (
               <li key={`${observation.code}-${index}`} data-observation-code={observation.code}>
-                <p><strong>{SEVERITY_LABELS[observation.severity]}</strong> · <code>{observation.code}</code></p>
-                <p>{observation.message}</p>
-                {observation.snapshot_ids.length > 0 && <details className="quality-details">
-                  <summary>Source snapshots / 来源快照</summary>
-                  <p><code>{observation.snapshot_ids.join(", ")}</code></p>
-                </details>}
+                <p><strong>{severityLabels[observation.severity]}</strong> · <strong>{qualityReasonLabel(observation.code)}</strong></p>
+                <p>{qualityObservationMessage(observation)}</p>
+                <details className="quality-details">
+                  <summary>来源快照与原因代码</summary>
+                  <p>原因代码：<code>{observation.code}</code></p>
+                  {observation.snapshot_ids.length > 0 && <p>来源快照：<code>{observation.snapshot_ids.join(", ")}</code></p>}
+                </details>
               </li>
             ))}
           </ul>
